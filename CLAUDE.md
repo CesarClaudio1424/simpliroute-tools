@@ -10,7 +10,7 @@ App Streamlit para edicion masiva de visitas a traves de la API de SimpliRoute. 
 
 ## Repositorio
 - **GitHub:** CesarClaudio1424/simpliroute-tools (publico)
-- **Deploy:** Streamlit Community Cloud — https://simpliroutetols.streamlit.app/
+- **Deploy:** Streamlit Community Cloud — https://simpliroute-tools.streamlit.app/
 
 ## Estructura
 ```
