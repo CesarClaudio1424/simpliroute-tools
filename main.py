@@ -2,6 +2,7 @@ import streamlit as st
 from estilos import generar_tema, generar_css
 from edicion import pagina_edicion
 from pagina_webhooks import pagina_webhooks
+from bloqueo_lvp import pagina_bloqueo_lvp
 
 st.set_page_config(
     page_title="SimpliRoute Tools",
@@ -36,7 +37,7 @@ with st.sidebar:
 
     pagina = st.radio(
         "Herramienta",
-        ["Edicion Masiva de Visitas", "Webhooks Likewise"],
+        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Bloqueo LVP"],
         label_visibility="collapsed",
     )
 
@@ -51,5 +52,7 @@ with st.sidebar:
 # --- Dispatch ---
 if pagina == "Edicion Masiva de Visitas":
     pagina_edicion(THEME)
-else:
+elif pagina == "Webhooks Likewise":
     pagina_webhooks()
+else:
+    pagina_bloqueo_lvp()

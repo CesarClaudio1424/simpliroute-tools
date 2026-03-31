@@ -1,9 +1,10 @@
 # SimpliRoute Tools
 
 ## Descripcion
-App Streamlit multi-herramienta con navegacion por sidebar. Incluye dos herramientas:
+App Streamlit multi-herramienta con navegacion por sidebar. Incluye tres herramientas:
 1. **Edicion Masiva de Visitas** — Sube un CSV y edita visitas en bloque via API SimpliRoute (PUT).
 2. **Webhooks Likewise** — Envia webhooks a Google Cloud Functions para procesar rutas/visitas del middleware Likewise (POST).
+3. **Bloqueo LVP** — Configura bloqueo de edicion y modo seguridad en cuentas Liverpool via API SimpliRoute (POST).
 
 ## Stack
 - **Python 3.12.3** con entorno virtual `.venv`
@@ -21,6 +22,8 @@ estilos.py                           # THEME dict + generador de CSS dinamico
 edicion.py                           # Pagina Edicion Masiva (UI + helpers API/CSV)
 pagina_webhooks.py                   # Pagina Webhooks Likewise (UI)
 webhook.py                           # Backend webhooks Likewise (URLs, envio HTTP)
+bloqueo_lvp.py                       # Pagina Bloqueo LVP (UI + API configs Liverpool)
+cuentas.csv                          # 58 cuentas Liverpool (nombre, id)
 requirements.txt                     # Dependencias para Streamlit Cloud
 .gitignore                           # Exclusiones de git
 .claude/commands/simpliroute-api.md  # Skill con referencia de API SimpliRoute
@@ -32,7 +35,7 @@ requirements.txt                     # Dependencias para Streamlit Cloud
 - Fuente Inter
 - Soporte dark/light mode con toggle (st.session_state, sin JS)
 - CSS dinamico generado con dict THEME segun el modo activo
-- Ambas paginas comparten el mismo estilo visual (sr-header, sr-label, sr-stat, sr-tip, etc.)
+- Todas las paginas comparten el mismo estilo visual (sr-header, sr-label, sr-stat, sr-tip, etc.)
 
 ## Flujo: Edicion Masiva
 1. Usuario ingresa token de API
@@ -51,6 +54,15 @@ requirements.txt                     # Dependencias para Streamlit Cloud
 5. Valida status 200 + body no vacio (body vacio = error)
 6. Solo muestra errores en la lista; contador de procesados junto a la barra de progreso
 
+## Flujo: Bloqueo LVP
+1. Usuario ingresa token de API
+2. Selecciona cuenta Liverpool del dropdown (58 cuentas desde cuentas.csv)
+3. Elige valor True (activar bloqueo) o False (desactivar)
+4. Al procesar: envia 2 POST a `/accounts/{ID}/configs/` con las keys:
+   - `disable_edit_for_active_and_finished_routes`
+   - `enable_safety_mode`
+5. Muestra resultado por cada configuracion
+
 ## Ejecutar
 ```bash
 source .venv/Scripts/activate
@@ -61,6 +73,10 @@ streamlit run main.py
 ### SimpliRoute (Edicion Masiva)
 - `GET /v1/accounts/me/` - Validacion de cuenta
 - `PUT /v1/routes/visits/` - Edicion masiva de visitas
+- Auth: `Authorization: Token {API_TOKEN}`
+
+### SimpliRoute (Bloqueo LVP)
+- `POST /v1/accounts/{ACCOUNT_ID}/configs/` - Configuracion de cuenta
 - Auth: `Authorization: Token {API_TOKEN}`
 
 ### Likewise Middleware (Webhooks)
