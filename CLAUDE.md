@@ -31,6 +31,7 @@ reporte_visitas.py                   # Pagina Reporte Visitas/Rutas (UI + API re
 checkout_general.py                  # Pagina Checkout General (UI + API send-webhooks)
 cuentas.csv                          # 57 cuentas Liverpool (nombre, id)
 requirements.txt                     # Dependencias para Streamlit Cloud
+runtime.txt                          # Pin Python 3.12 para Streamlit Cloud
 .gitignore                           # Exclusiones de git
 .claude/commands/simpliroute-api.md  # Skill con referencia de API SimpliRoute
 ```
