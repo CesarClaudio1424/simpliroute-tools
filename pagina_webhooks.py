@@ -4,6 +4,7 @@ from utils import (
     render_header, render_guide, render_stat, render_label,
     render_tip, render_error_item, render_cuenta_badge,
     create_progress_tracker, update_progress, finish_progress,
+    load_secret,
 )
 
 
@@ -72,6 +73,23 @@ def pagina_webhooks():
 
     items = [line.strip() for line in rutas_input.strip().split("\n") if line.strip()]
 
+    # --- Paso opcional: eliminar de SimpliRoute ---
+    eliminar_sr = False
+    fecha_limpieza = None
+    if exclusion:
+        st.divider()
+        eliminar_sr = st.checkbox(
+            "Tambien eliminar visitas de SimpliRoute",
+            help="Quita la ruta y mueve la fecha a 2020-01-01 para cada visita excluida",
+            key="wh_eliminar_sr",
+        )
+        if eliminar_sr:
+            render_tip(
+                "Se consultaran las visitas de la fecha indicada, se identificaran las excluidas "
+                "y se les quitara la ruta, moviendo su fecha a 2020-01-01."
+            )
+            fecha_limpieza = st.date_input("Fecha de las visitas a limpiar", key="wh_fecha_limpieza")
+
     acciones_sel = []
     if creacion:
         acciones_sel.append("Creacion")
@@ -113,6 +131,53 @@ def pagina_webhooks():
             if body.strip():
                 with st.expander("Detalle del error"):
                     st.code(body[:500])
+
+        # --- Limpieza opcional en SimpliRoute ---
+        if ok and eliminar_sr and fecha_limpieza:
+            st.divider()
+            render_label("Limpieza en SimpliRoute")
+
+            token_key = webhook.ACCOUNT_TOKENS[cuenta]
+            token = load_secret(token_key, f"Token de {cuenta} no encontrado en secrets (api_config.{token_key})")
+
+            fecha_str = fecha_limpieza.strftime("%Y-%m-%d")
+            with st.spinner("Consultando visitas de la fecha..."):
+                try:
+                    visitas = webhook.obtener_visitas_fecha(token, fecha_str)
+                except Exception as e:
+                    st.error(f"Error al consultar visitas: {e}")
+                    st.stop()
+
+            refs_excluidos = set(items)
+            visitas_a_limpiar = [v for v in visitas if v.get("reference") in refs_excluidos]
+
+            if not visitas_a_limpiar:
+                st.warning(f"No se encontraron visitas excluidas en la fecha {fecha_str}")
+            else:
+                st.info(f"{len(visitas_a_limpiar)} de {len(items)} visitas encontradas en la fecha {fecha_str}")
+
+                total_l = len(visitas_a_limpiar)
+                exitosos_l = 0
+                barra_l, contador_l, errores_l = create_progress_tracker(total_l, "Limpiando visitas...")
+
+                for i, visita in enumerate(visitas_a_limpiar):
+                    ok_l, status_l, body_l = webhook.limpiar_visita(token, visita["id"])
+                    procesados_l = i + 1
+
+                    if ok_l:
+                        exitosos_l += 1
+                    else:
+                        with errores_l:
+                            render_error_item(f"Visita {visita.get('reference')} (ID {visita['id']}) — HTTP {status_l}")
+
+                    update_progress(barra_l, contador_l, procesados_l, total_l, "Limpiando visitas...")
+
+                finish_progress(barra_l)
+
+                if exitosos_l > 0:
+                    st.success(f"{exitosos_l} de {total_l} visitas limpiadas en SimpliRoute")
+                if exitosos_l < total_l:
+                    st.error(f"{total_l - exitosos_l} visitas no se pudieron limpiar")
     else:
         operaciones = []
         if creacion:

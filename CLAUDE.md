@@ -60,6 +60,10 @@ runtime.txt                          # Pin Python 3.12 para Streamlit Cloud
 4. Al procesar: rutas se envian una a una; exclusiones en un solo request con array de IDs
 5. Valida status 200 + body no vacio (body vacio = error)
 6. Solo muestra errores en la lista; contador de procesados junto a la barra de progreso
+7. (Opcional) Al excluir, puede tambien limpiar las visitas de SimpliRoute:
+   - Usuario marca checkbox "Tambien eliminar visitas de SimpliRoute" e ingresa fecha
+   - Token se carga desde `st.secrets.api_config.token_{cuenta}` (token_telefonica, token_entel, etc.)
+   - GET visitas por fecha, filtra las excluidas, PUT a cada una con `route: null`, `planned_date: 2020-01-01`
 
 ## Flujo: Bloqueo LVP
 1. Token se carga automaticamente desde `st.secrets.api_config.auth_token`

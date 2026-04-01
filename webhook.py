@@ -1,6 +1,6 @@
 import requests
 import time
-from config import REQUEST_TIMEOUT, WEBHOOK_DELAY
+from config import API_BASE, REQUEST_TIMEOUT, WEBHOOK_DELAY
 
 ENDPOINTS = {
     "Telefonica": {
@@ -28,6 +28,45 @@ ENDPOINTS = {
         "exclusion": "https://us-central1-likewizemiddleware-biobio.cloudfunctions.net/likewize/webhook/visits/support",
     },
 }
+
+
+ACCOUNT_TOKENS = {
+    "Telefonica": "token_telefonica",
+    "Entel": "token_entel",
+    "Omnicanalidad": "token_omnicanalidad",
+    "Biobio": "token_biobio",
+}
+
+
+def obtener_visitas_fecha(token, fecha):
+    headers = {"Authorization": f"Token {token}"}
+    url = f"{API_BASE}/routes/visits/?planned_date={fecha}"
+    visitas = []
+    while url:
+        resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        if isinstance(data, list):
+            visitas.extend(data)
+            url = None
+        else:
+            visitas.extend(data.get("results", []))
+            url = data.get("next")
+    return visitas
+
+
+def limpiar_visita(token, visit_id):
+    url = f"{API_BASE}/routes/visits/{visit_id}"
+    headers = {
+        "Authorization": f"Token {token}",
+        "Content-Type": "application/json",
+    }
+    payload = {"route": None, "planned_date": "2020-01-01"}
+    try:
+        resp = requests.put(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        return resp.status_code == 200, resp.status_code, resp.text
+    except requests.exceptions.RequestException as e:
+        return False, 0, f"Error de conexion: {str(e)}"
 
 
 def enviar_webhook(url, payload):
