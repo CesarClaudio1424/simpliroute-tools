@@ -129,6 +129,10 @@ def pagina_edicion():
             '<strong>Importante:</strong> La columna <code>id</code> es <strong>obligatoria</strong> — identifica que visita se va a editar. '
             'Ademas necesitas al menos una columna mas con el campo que quieras modificar. Las fechas deben ir en formato <code>dd/mm/yyyy</code>.'
         )
+        render_tip(
+            '<strong>Nota:</strong> La API requiere que cada visita tenga <code>title</code> (nombre) y <code>address</code> (direccion). '
+            'Si la visita no tiene estos campos, la edicion sera rechazada. Asegurate de que ya existan o incluyelos en el CSV.'
+        )
         filas_html = ""
         for campo in PLANTILLA_CAMPOS:
             tag = '<span class="sr-tag sr-tag-req">obligatorio</span>' if campo["req"] else '<span class="sr-tag sr-tag-opt">opcional</span>'
@@ -230,4 +234,7 @@ def pagina_edicion():
     if errores:
         st.error(f"{len(errores)} bloque(s) con error")
         for err in errores:
-            st.warning(f"Bloque {err['bloque']} (HTTP {err['codigo']}): {err['detalle']}")
+            st.markdown(
+                f'<div class="sr-result-err">Bloque {err["bloque"]} (HTTP {err["codigo"]}): {err["detalle"]}</div>',
+                unsafe_allow_html=True,
+            )

@@ -319,5 +319,11 @@ def generar_css(THEME, dark):
         background: {"#2a1a1e" if dark else "#fdedf0"};
         color: {"#ff6b6b" if dark else "#d32f2f"};
     }}
+
+    /* Alertas Streamlit - texto visible en ambos modos */
+    [data-testid="stNotification"] p,
+    .stAlert p {{
+        color: {"#e0e0e0" if dark else "#31333f"} !important;
+    }}
     </style>
     """

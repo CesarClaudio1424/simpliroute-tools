@@ -13,9 +13,9 @@ App Streamlit multi-herramienta con navegacion por sidebar. Incluye cinco herram
 - **Streamlit** - Frontend web
 - **requests** - Cliente HTTP
 
-## Repositorio
-- **GitHub:** CesarClaudio1424/simpliroute-tools (publico)
-- **Deploy:** Streamlit Community Cloud — https://simpliroute-tools.streamlit.app/
+## Repositorios
+- **Produccion:** CesarClaudio1424/simpliroute-tools (publico) — https://simpliroute-tools.streamlit.app/
+- **Pruebas:** CesarClaudio1424/pruebassimpli (publico)
 
 ## Estructura
 ```
@@ -113,6 +113,12 @@ streamlit run main.py
 - `POST /likewize/webhook/routes/checkout` - Checkout de rutas
 - `POST /likewize/webhook/visits/support` - Exclusion de visitas
 - Sin auth (acceso por URL)
+
+### SimpliRoute (Limpieza post-exclusion)
+- `GET /v1/routes/visits/?planned_date={YYYY-MM-DD}` - Obtener visitas por fecha
+- `PUT /v1/routes/visits/{visit_id}` - Quitar ruta y mover fecha a 2020-01-01
+- Auth: `Authorization: Token {token_cuenta}` (desde secrets: token_telefonica, token_entel, etc.)
+- Matching: visitas se identifican por campo `reference`
 
 ### SimpliRoute (Checkout General)
 - `POST /v1/mobile/send-webhooks` - Envio de webhooks para rutas/visitas
