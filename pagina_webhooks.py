@@ -170,7 +170,7 @@ def pagina_webhooks():
 
             refs_excluidos = set(items)
             refs_encontrados = {v.get("reference") for v in visitas if v.get("reference") in refs_excluidos}
-            visitas_a_limpiar = [v for v in visitas if v.get("reference") in refs_excluidos]
+            visitas_a_limpiar = [v for v in visitas if v.get("reference") in refs_excluidos and not v.get("route")]
             no_encontrados = refs_excluidos - refs_encontrados
 
             rango_txt = fecha_desde.strftime("%Y-%m-%d") if total_dias == 1 else f"{fecha_desde.strftime('%Y-%m-%d')} a {fecha_hasta.strftime('%Y-%m-%d')}"
