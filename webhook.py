@@ -61,7 +61,7 @@ def limpiar_visitas_batch(token, visitas):
         "Authorization": f"Token {token}",
         "Content-Type": "application/json",
     }
-    payload = [{"id": v["id"], "route": "", "planned_date": "2020-01-01"} for v in visitas]
+    payload = [{"id": v["id"], "title": v.get("title", ""), "address": v.get("address", ""), "route": "", "planned_date": "2020-01-01"} for v in visitas]
     try:
         resp = requests.put(url, headers=headers, json=payload, timeout=CLEANUP_TIMEOUT)
         return resp.status_code == 200, resp.status_code, resp.text
