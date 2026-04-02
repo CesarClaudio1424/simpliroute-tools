@@ -93,26 +93,26 @@ def pagina_unilever():
 
     render_guide(
         steps=[
-            '<strong>Sube el archivo maestro (Ruteo Dinámico)</strong> — CSV con columnas <code>reference</code>, <code>load_2</code>, <code>load_3</code> y opcionalmente <code>window_start</code>, <code>window_end</code>.',
-            '<strong>Selecciona la fecha del ruteo</strong> — Se consultaran las visitas de esa fecha en cada cuenta para obtener los IDs.',
-            '<strong>Sube los archivos por agencia</strong> — Cada agencia tiene su propio cuadro. El CSV debe tener la columna <code>reference</code>.',
-            '<strong>Procesa la edicion</strong> — Se cruzan los <code>reference</code> del archivo de agencia con el maestro y las visitas de la API. Se actualizan <code>load_2</code> y <code>load_3</code>. Para <strong>Monterrey</strong> tambien ventanas horarias.',
+            '<strong>Sube el archivo maestro (Ruteo Dinámico)</strong> — CSV con columnas <code>ID</code>, <code>load_2</code>, <code>load_3</code> y opcionalmente <code>window_start</code>, <code>window_end</code>.',
+            '<strong>Selecciona la fecha del ruteo</strong> — Se consultaran las visitas de esa fecha en cada cuenta para obtener los IDs de SimpliRoute.',
+            '<strong>Sube los archivos por agencia</strong> — Cada agencia tiene su propio cuadro. El CSV debe tener la columna <code>ID</code>.',
+            '<strong>Procesa la edicion</strong> — Se cruzan los <code>ID</code> del archivo de agencia con el maestro y el <code>reference</code> de la API. Se actualizan <code>load_2</code> y <code>load_3</code>. Para <strong>Monterrey</strong> tambien ventanas horarias.',
         ],
-        tip='Los tokens de cada agencia se cargan automaticamente desde la configuracion. El <code>id</code> de cada visita se obtiene consultando la API por fecha y cruzando el <code>reference</code>.',
+        tip='Los tokens de cada agencia se cargan automaticamente desde la configuracion. El ID de cada visita en SimpliRoute se obtiene consultando la API por fecha y cruzando la columna <code>ID</code> con el campo <code>reference</code>.',
     )
 
     # --- Paso 1: Archivo maestro ---
     render_label("Paso 1 · Archivo maestro (Ruteo Dinámico)")
     archivo_maestro = st.file_uploader(
         "Ruteo Dinámico", type=["csv"], label_visibility="collapsed",
-        help="CSV con reference, load_2, load_3, window_start, window_end",
+        help="CSV con ID, load_2, load_3, window_start, window_end",
         key="unilever_maestro",
     )
 
     if not archivo_maestro:
         render_tip(
             'Sube el archivo <strong>Ruteo Dinámico</strong> (CSV). Debe tener al menos la columna '
-            '<code>reference</code> junto con <code>load_2</code>, <code>load_3</code> y opcionalmente '
+            '<code>ID</code> junto con <code>load_2</code>, <code>load_3</code> y opcionalmente '
             '<code>window_start</code>, <code>window_end</code>.'
         )
         st.stop()
@@ -123,13 +123,13 @@ def pagina_unilever():
         st.stop()
 
     cols_maestro = list(datos_maestro[0].keys())
-    if "reference" not in cols_maestro:
-        st.error("El archivo maestro debe tener una columna **reference**.")
+    if "ID" not in cols_maestro:
+        st.error("El archivo maestro debe tener una columna **ID**.")
         st.stop()
 
     maestro_dict = {}
     for row in datos_maestro:
-        ref = row.get("reference", "").strip()
+        ref = row.get("ID", "").strip()
         if ref:
             maestro_dict[ref] = row
 
@@ -182,7 +182,7 @@ def pagina_unilever():
 
             archivo = st.file_uploader(
                 f"Archivo {agencia}", type=["csv"], label_visibility="collapsed",
-                help=f"CSV con reference para {agencia}",
+                help=f"CSV con ID para {agencia}",
                 key=f"unilever_{agencia}",
             )
             if archivo:
@@ -192,11 +192,11 @@ def pagina_unilever():
                     continue
 
                 cols = list(datos[0].keys())
-                if "reference" not in cols:
-                    st.error(f"El archivo de **{agencia}** debe tener la columna **reference**.")
+                if "ID" not in cols:
+                    st.error(f"El archivo de **{agencia}** debe tener la columna **ID**.")
                     continue
 
-                refs_agencia = [row.get("reference", "").strip() for row in datos if row.get("reference", "").strip()]
+                refs_agencia = [row.get("ID", "").strip() for row in datos if row.get("ID", "").strip()]
                 archivos_agencia[agencia] = refs_agencia
                 matches = sum(1 for ref in refs_agencia if ref in maestro_dict)
 
@@ -209,7 +209,7 @@ def pagina_unilever():
                 with st.expander("Vista previa (primeras 20 filas)"):
                     st.dataframe(pd.DataFrame(datos[:20]), use_container_width=True)
             else:
-                render_tip(f'Sube el archivo CSV de <strong>{agencia}</strong> con la columna <code>reference</code>.')
+                render_tip(f'Sube el archivo CSV de <strong>{agencia}</strong> con la columna <code>ID</code>.')
 
     if not archivos_agencia:
         render_tip('Sube al menos un archivo de agencia para poder procesar.', warning=True)
@@ -233,7 +233,7 @@ def pagina_unilever():
         st.markdown(render_stat(f"{total_matches_maestro:,}", "con datos en maestro"), unsafe_allow_html=True)
 
     if total_matches_maestro == 0:
-        st.warning("No hay coincidencias entre el archivo maestro y los archivos de agencia. Verifica que los references coincidan.")
+        st.warning("No hay coincidencias entre el archivo maestro y los archivos de agencia. Verifica que los ID coincidan.")
         st.stop()
 
     render_tip(
