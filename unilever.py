@@ -28,6 +28,12 @@ def _leer_csv(archivo):
     return list(lector)
 
 
+def _leer_xlsx(archivo):
+    df = pd.read_excel(archivo, dtype=str)
+    df = df.fillna("")
+    return df.to_dict(orient="records")
+
+
 def _load_token(agencia):
     key = AGENCIA_TOKENS[agencia]
     try:
@@ -95,7 +101,7 @@ def pagina_unilever():
         steps=[
             '<strong>Sube el archivo maestro (Ruteo Dinámico)</strong> — CSV con columnas <code>ID</code>, <code>load_2</code>, <code>load_3</code> y opcionalmente <code>window_start</code>, <code>window_end</code>.',
             '<strong>Selecciona la fecha del ruteo</strong> — Se consultaran las visitas de esa fecha en cada cuenta para obtener los IDs de SimpliRoute.',
-            '<strong>Sube los archivos por agencia</strong> — Cada agencia tiene su propio cuadro. El CSV debe tener la columna <code>ID</code>.',
+            '<strong>Sube los archivos por agencia</strong> — Cada agencia tiene su propio cuadro. El Excel (.xlsx) debe tener la columna <code>ID</code>.',
             '<strong>Procesa la edicion</strong> — Se cruzan los <code>ID</code> del archivo de agencia con el maestro y el <code>reference</code> de la API. Se actualizan <code>load_2</code> y <code>load_3</code>. Para <strong>Monterrey</strong> tambien ventanas horarias.',
         ],
         tip='Los tokens de cada agencia se cargan automaticamente desde la configuracion. El ID de cada visita en SimpliRoute se obtiene consultando la API por fecha y cruzando la columna <code>ID</code> con el campo <code>reference</code>.',
@@ -181,14 +187,14 @@ def pagina_unilever():
                 )
 
             archivo = st.file_uploader(
-                f"Archivo {agencia}", type=["csv"], label_visibility="collapsed",
-                help=f"CSV con ID para {agencia}",
+                f"Archivo {agencia}", type=["xlsx"], label_visibility="collapsed",
+                help=f"Excel con ID para {agencia}",
                 key=f"unilever_{agencia}",
             )
             if archivo:
-                datos = _leer_csv(archivo)
+                datos = _leer_xlsx(archivo)
                 if not datos:
-                    st.error(f"El archivo de {agencia} esta vacio o no se pudo leer.")
+                    st.error(f"El archivo de {agencia} esta vacio o no se pudo leer. Asegurate de que sea un archivo .xlsx valido.")
                     continue
 
                 cols = list(datos[0].keys())
@@ -209,7 +215,7 @@ def pagina_unilever():
                 with st.expander("Vista previa (primeras 20 filas)"):
                     st.dataframe(pd.DataFrame(datos[:20]), use_container_width=True)
             else:
-                render_tip(f'Sube el archivo CSV de <strong>{agencia}</strong> con la columna <code>ID</code>.')
+                render_tip(f'Sube el archivo Excel (.xlsx) de <strong>{agencia}</strong> con la columna <code>ID</code>.')
 
     if not archivos_agencia:
         render_tip('Sube al menos un archivo de agencia para poder procesar.', warning=True)
