@@ -90,6 +90,7 @@ def _to_number(value):
 def _construir_payload(visita_api, row_maestro, es_monterrey):
     payload = {
         "id": visita_api["id"],
+        "reference": visita_api.get("reference", ""),
         "title": visita_api.get("title", ""),
         "address": visita_api.get("address", ""),
     }
