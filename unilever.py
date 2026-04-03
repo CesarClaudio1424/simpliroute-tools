@@ -34,6 +34,21 @@ def _leer_xlsx(archivo):
     return df.to_dict(orient="records")
 
 
+_COLUMN_MAP = {
+    "carga 2": "load_2", "carga2": "load_2", "load 2": "load_2",
+    "carga 3": "load_3", "carga3": "load_3", "load 3": "load_3",
+    "ventana inicio": "window_start", "inicio": "window_start", "window start": "window_start",
+    "ventana fin": "window_end", "fin": "window_end", "window end": "window_end",
+}
+
+
+def _normalizar_columnas(rows):
+    if not rows:
+        return rows
+    renamed = {k: _COLUMN_MAP.get(k.strip().lower(), k) for k in rows[0].keys()}
+    return [{renamed[k]: v for k, v in row.items()} for row in rows]
+
+
 def _load_token(agencia):
     key = AGENCIA_TOKENS[agencia]
     try:
@@ -145,6 +160,7 @@ def pagina_unilever():
         st.error("El archivo maestro esta vacio o no se pudo leer.")
         st.stop()
 
+    datos_maestro = _normalizar_columnas(datos_maestro)
     cols_maestro = list(datos_maestro[0].keys())
     if "ID" not in cols_maestro:
         st.error("El archivo maestro debe tener una columna **ID**.")
