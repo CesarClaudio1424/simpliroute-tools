@@ -44,6 +44,47 @@ _DIA_MAP = {
 _ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 _DAY_ORDER = {d: i for i, d in enumerate(_ALL_DAYS)}
 
+# Spanish abbreviated day names (single letter, miércoles = X)
+_DIA_ABBR = {
+    "LUNES": "L",   "LUN": "L",
+    "MARTES": "M",  "MAR": "M",
+    "MIERCOLES": "X", "MIÉRCOLES": "X", "MIE": "X", "MIÉ": "X",
+    "JUEVES": "J",  "JUE": "J",
+    "VIERNES": "V", "VIE": "V",
+    "SABADO": "S",  "SÁBADO": "S", "SAB": "S", "SÁB": "S",
+    "DOMINGO": "D", "DOM": "D",
+}
+_DIA_ORDER_ES = ["LUNES", "MARTES", "MIERCOLES", "JUEVES", "VIERNES", "SABADO", "DOMINGO"]
+_DIA_ABBR_ALL = ["L", "M", "X", "J", "V", "S", "D"]
+
+
+def _abbreviate_dias(raw: str, sep: str = " - ") -> str:
+    """Convert a Spanish day string to abbreviated form, e.g. 'LUNES JUEVES' → 'L - J'."""
+    text = raw.upper().strip()
+
+    if any(kw in text for kw in ("TODOS", "TODA", "DIARIO", "DAILY")):
+        return sep.join(_DIA_ABBR_ALL)
+
+    # Range: "X A Y"
+    if " A " in text:
+        parts = text.split(" A ", 1)
+        s_key = parts[0].strip()
+        e_key = parts[1].strip()
+        si = next((i for i, d in enumerate(_DIA_ORDER_ES) if d.startswith(s_key[:3])), None)
+        ei = next((i for i, d in enumerate(_DIA_ORDER_ES) if d.startswith(e_key[:3])), None)
+        if si is not None and ei is not None and si <= ei:
+            return sep.join(_DIA_ABBR_ALL[si: ei + 1])
+
+    # Space / comma separated
+    tokens = [t.strip().rstrip(",") for t in text.replace(",", " ").split()]
+    abbrs = [_DIA_ABBR[t] for t in tokens if t in _DIA_ABBR]
+    seen, unique = set(), []
+    for a in abbrs:
+        if a not in seen:
+            seen.add(a)
+            unique.append(a)
+    return sep.join(unique) if unique else raw
+
 
 def _parse_schedules(dia_value: str) -> list[str]:
     """
@@ -353,23 +394,37 @@ def pagina_zonas_kml():
         )
 
         if usar_dias:
-            campo_dia = st.selectbox(
-                "Campo de dias",
-                all_attr_keys,
-                index=all_attr_keys.index(dia_field_default) if dia_field_default else 0,
-                key="kml_campo_dia",
-            )
+            col_campo, col_fmt = st.columns([3, 2])
+            with col_campo:
+                campo_dia = st.selectbox(
+                    "Campo de dias",
+                    all_attr_keys,
+                    index=all_attr_keys.index(dia_field_default) if dia_field_default else 0,
+                    key="kml_campo_dia",
+                )
+            with col_fmt:
+                fmt_dia = st.radio(
+                    "Formato en el nombre",
+                    ["Completo", "Abreviado (L - J)"],
+                    horizontal=True,
+                    key="kml_fmt_dia",
+                )
 
-            # Parse and preview
+            abreviar = fmt_dia == "Abreviado (L - J)"
+            sep_abbr = st.session_state.get("kml_sep_choice", " - ")
+
+            # Parse schedules and optionally build abbreviated attrs override
             parsed_rows = []
             for i, z in enumerate(zones):
                 raw = z["attrs"].get(campo_dia, "")
                 days = _parse_schedules(raw) if raw else []
                 schedules_por_zona[i] = days
+                abbr = _abbreviate_dias(raw, sep_abbr) if abreviar and raw else raw
                 parsed_rows.append({
                     "N°": i + 1,
                     "Nombre": nombres_finales[i],
                     "Valor en KML": raw,
+                    "Abreviado": abbr,
                     "Dias (EN)": ", ".join(days) if days else "— sin parsear —",
                 })
 
@@ -383,6 +438,19 @@ def pagina_zonas_kml():
                     "Se enviaran sin <code>schedules</code>.",
                     warning=True,
                 )
+
+            # Apply abbreviation override to attrs used for name template
+            if abreviar:
+                nombres_finales = [
+                    _apply_name_template(
+                        {**z, "attrs": {**z["attrs"], campo_dia: parsed_rows[i]["Abreviado"]}},
+                        st.session_state.get("kml_template", "") if modo_nombre == "Usar atributos del KML" else "",
+                        i + 1,
+                    )
+                    if modo_nombre == "Usar atributos del KML"
+                    else nombres_finales[i]
+                    for i, z in enumerate(zones)
+                ]
 
     # --- Preview de zonas ---
     st.markdown("---")
