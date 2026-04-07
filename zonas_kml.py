@@ -356,15 +356,16 @@ def pagina_zonas_kml():
                     st.rerun()
 
         # Editable template + clear button
+        def _clear_template():
+            st.session_state["kml_template"] = ""
+
         col_tpl, col_clear = st.columns([5, 1])
         with col_tpl:
             render_label("Nombre resultante")
             st.text_input("Template", key="kml_template", label_visibility="collapsed")
         with col_clear:
             st.markdown('<div style="padding-top:1.85rem;"></div>', unsafe_allow_html=True)
-            if st.button("Limpiar", key="kml_clear", use_container_width=True):
-                st.session_state["kml_template"] = ""
-                st.rerun()
+            st.button("Limpiar", key="kml_clear", on_click=_clear_template, use_container_width=True)
 
         template = st.session_state.get("kml_template", "")
         nombres_finales = [_apply_name_template(z, template, i + 1) for i, z in enumerate(zones)]
