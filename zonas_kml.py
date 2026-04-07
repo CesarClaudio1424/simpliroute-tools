@@ -325,7 +325,7 @@ def pagina_zonas_kml():
             st.session_state.pop("_kml_zonas_lista", None)
             st.session_state["_kml_del_token"] = token
 
-        if st.button("Cargar zonas", key="kml_btn_cargar_zonas"):
+        if st.button("Leer zonas de la cuenta", key="kml_btn_cargar_zonas"):
             zonas_api, err_api = _listar_zonas(token)
             if err_api:
                 st.error(f"Error al cargar zonas: {err_api}")
