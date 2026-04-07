@@ -1,7 +1,7 @@
 # SimpliRoute Tools
 
 ## Descripcion
-App Streamlit multi-herramienta con navegacion por sidebar. Incluye siete herramientas:
+App Streamlit multi-herramienta con navegacion por sidebar. Incluye ocho herramientas:
 1. **Edicion Masiva de Visitas** — Sube un CSV y edita visitas en bloque via API SimpliRoute (PUT).
 2. **Webhooks Likewise** — Envia webhooks a Google Cloud Functions para procesar rutas/visitas del middleware Likewise (POST).
 3. **Bloqueo LVP** — Configura bloqueo de edicion y modo seguridad en cuentas Liverpool via API SimpliRoute (POST).
@@ -9,6 +9,7 @@ App Streamlit multi-herramienta con navegacion por sidebar. Incluye siete herram
 5. **Checkout General** — Envia webhooks de checkout a SimpliRoute para rutas y visitas de cualquier cuenta (POST).
 6. **Unilever** — Actualiza cargas (load_2, load_3) y ventanas horarias por agencia via API SimpliRoute (PUT).
 7. **Zonas KML** — Crea zonas en SimpliRoute desde archivos KML (poligonos exportados de Google My Maps), o elimina zonas existentes de una cuenta.
+8. **Recuperar Visitas LVP** — Busca visitas Liverpool por referencia y las asigna a la ruta/fecha correcta (GET + PUT).
 
 ## Stack
 - **Python 3.12.3** con entorno virtual `.venv`
@@ -37,7 +38,8 @@ reporte_visitas.py                   # Pagina Reporte Visitas/Rutas (UI + API re
 checkout_general.py                  # Pagina Checkout General (UI + API send-webhooks)
 unilever.py                          # Pagina Unilever (UI + API edicion cargas/ventanas por agencia)
 zonas_kml.py                         # Pagina Zonas KML (UI + API creacion/eliminacion de zonas)
-cuentas.csv                          # 57 cuentas Liverpool (nombre, id)
+recuperar_lvp.py                     # Pagina Recuperar Visitas LVP (UI + busqueda hibrida + asignacion)
+cuentas.csv                          # Cuentas Liverpool (nombre, id, token)
 requirements.txt                     # Dependencias para Streamlit Cloud
 runtime.txt                          # Pin Python 3.12 para Streamlit Cloud
 .gitignore                           # Exclusiones de git
@@ -148,6 +150,14 @@ streamlit run main.py
 - `GET /v1/reports/routes/from/{start}/to/{end}/?email={email}` - Reporte de rutas (api-gateway.simpliroute.com)
 - Auth: `Authorization: Token {API_TOKEN}`
 
+### SimpliRoute (Recuperar Visitas LVP)
+- `GET /v1/routes/visits/reference/{reference}/` - Busqueda por referencia (con trailing slash; respuesta paginada `{count, results}`)
+- `GET /v1/routes/visits/?planned_date={YYYY-MM-DD}` - Fallback: busqueda por fecha filtrando por `reference`
+- `GET /v1/plans/{YYYY-MM-DD}/vehicles/` - Listar vehiculos/rutas de una fecha para resolver route_id
+- `PUT /v1/routes/visits/{id}` - Asignar visita a ruta: payload `{"route": route_id, "planned_date": "YYYY-MM-DD"}`
+- Auth: `Authorization: Token {token}` (desde columna `token` de `cuentas.csv` segun cuenta seleccionada)
+- Fallback paralelo: `ThreadPoolExecutor` con 10 hilos, ±30 dias desde hoy
+
 ### SimpliRoute (Zonas KML)
 - `POST /v1/zones/` - Crear zona. Payload: `{ "name", "coordinates", "vehicles": [], "schedules": [] }`
 - `GET /v1/zones/` - Listar zonas de la cuenta (response: lista o `{results: [...]}`)
@@ -156,6 +166,21 @@ streamlit run main.py
 - `coordinates` es un string con formato Python: `[{'lat': '19.4','lng': '-99.1'},...]`
 - `schedules` siempre se incluye (lista vacia o dias en ingles: Monday, Tuesday, etc.)
 - Delay entre requests: 0.5s (ZONA_DELAY)
+
+## Flujo: Recuperar Visitas LVP
+1. Token se carga automaticamente desde `cuentas.csv` segun la cuenta seleccionada (columna `token`)
+2. Selecciona cuenta Liverpool del dropdown
+3. Agrega filas dinamicas: referencia, nombre de vehiculo, fecha destino (boton "+ Agregar fila")
+4. **Buscar visitas y rutas** — por cada fila:
+   - `GET /v1/routes/visits/reference/{reference}/` — busqueda directa (respuesta paginada `{count, results}`)
+   - Si no encuentra: fallback paralelo con `ThreadPoolExecutor` (10 hilos, ±30 dias desde hoy)
+   - `GET /v1/plans/{fecha}/vehicles/` — resuelve route_id por nombre de vehiculo (case-insensitive)
+   - Muestra request + response en expanders por fila (expandido si hay error)
+5. Stats: listos / visita ok sin ruta / no encontradas
+6. **Procesar N visita(s)** — solo las que tienen visita y ruta encontradas
+   - `PUT /v1/routes/visits/{id}` con `route` y `planned_date`
+- `cuentas.csv` se lee con `encoding="latin-1"` (tiene acentos en nombres)
+- Respuesta del endpoint reference puede ser lista, objeto con `id`, o paginada `{results: [...]}`
 
 ## Flujo: Zonas KML
 1. Usuario ingresa token de API
