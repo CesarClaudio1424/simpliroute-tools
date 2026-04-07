@@ -179,9 +179,12 @@ def _crear_zona(token: str, name: str, coordinates: str, schedules: list[str] | 
         "Content-Type": "application/json;charset=UTF-8",
         "accept": "application/json, text/plain, */*",
     }
-    payload: dict = {"name": name, "coordinates": coordinates, "vehicles": []}
-    if schedules:
-        payload["schedules"] = schedules
+    payload: dict = {
+        "name": name,
+        "coordinates": coordinates,
+        "vehicles": [],
+        "schedules": schedules if schedules else [],
+    }
     try:
         resp = requests.post(
             "https://api.simpliroute.com/v1/zones/",
