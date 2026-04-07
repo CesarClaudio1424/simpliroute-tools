@@ -1,12 +1,14 @@
 # SimpliRoute Tools
 
 ## Descripcion
-App Streamlit multi-herramienta con navegacion por sidebar. Incluye cinco herramientas:
+App Streamlit multi-herramienta con navegacion por sidebar. Incluye siete herramientas:
 1. **Edicion Masiva de Visitas** — Sube un CSV y edita visitas en bloque via API SimpliRoute (PUT).
 2. **Webhooks Likewise** — Envia webhooks a Google Cloud Functions para procesar rutas/visitas del middleware Likewise (POST).
 3. **Bloqueo LVP** — Configura bloqueo de edicion y modo seguridad en cuentas Liverpool via API SimpliRoute (POST).
 4. **Reporte Visitas/Rutas** — Genera reportes por rango de fechas dividido en sub-intervalos y los envia por correo via API SimpliRoute (GET).
 5. **Checkout General** — Envia webhooks de checkout a SimpliRoute para rutas y visitas de cualquier cuenta (POST).
+6. **Unilever** — Actualiza cargas (load_2, load_3) y ventanas horarias por agencia via API SimpliRoute (PUT).
+7. **Zonas KML** — Crea zonas en SimpliRoute desde archivos KML (poligonos exportados de Google My Maps), o elimina zonas existentes de una cuenta.
 
 ## Stack
 - **Python 3.12.3** con entorno virtual `.venv`
@@ -16,6 +18,10 @@ App Streamlit multi-herramienta con navegacion por sidebar. Incluye cinco herram
 ## Repositorios
 - **Produccion:** CesarClaudio1424/simpliroute-tools (publico) — https://simpliroute-tools.streamlit.app/
 - **Pruebas:** CesarClaudio1424/pruebassimpli (publico)
+
+## Repositorios independientes
+Estas apps viven en repos propios, separados de simpliroute-tools, y tienen su propio deploy en Streamlit Cloud:
+- **Eliminacion de Visitas:** CesarClaudio1424/eliminacion-visitas — app de un solo archivo (`main.py`), elimina visitas en bloque via `POST /v1/bulk/delete/visits/`. No se agrega a este repo.
 
 ## Estructura
 ```
@@ -29,6 +35,8 @@ webhook.py                           # Backend webhooks Likewise (URLs, envio HT
 bloqueo_lvp.py                       # Pagina Bloqueo LVP (UI + API configs Liverpool)
 reporte_visitas.py                   # Pagina Reporte Visitas/Rutas (UI + API reportes)
 checkout_general.py                  # Pagina Checkout General (UI + API send-webhooks)
+unilever.py                          # Pagina Unilever (UI + API edicion cargas/ventanas por agencia)
+zonas_kml.py                         # Pagina Zonas KML (UI + API creacion/eliminacion de zonas)
 cuentas.csv                          # 57 cuentas Liverpool (nombre, id)
 requirements.txt                     # Dependencias para Streamlit Cloud
 runtime.txt                          # Pin Python 3.12 para Streamlit Cloud
@@ -128,7 +136,52 @@ streamlit run main.py
 - Payload: `{ "account_ids": [int], "planned_date": "YYYY-MM-DD", "route_ids"|"visit_ids": [int] }`
 - Auth: `Authorization: Token {CHECKOUT_TOKEN}` (desde secrets)
 
+### SimpliRoute (Unilever)
+- `GET /v1/routes/visits/?planned_date={YYYY-MM-DD}` - Obtener visitas por fecha para cruzar references
+- `PUT /v1/routes/visits/` - Edicion bulk: actualiza load_2, load_3 (y window_start/window_end para Monterrey)
+- Auth: `Authorization: Token {token_agencia}` (desde secrets: `[cuentas_unilever]` con keys token_tlahuac, token_monterrey, token_hermosillo, token_merida, token_mexicali)
+- Payload incluye siempre: id, reference, title, address. load_2/load_3 solo si son numericos validos.
+- Matching: campo `reference` de la API se cruza con columna `ID` del archivo de agencia y del maestro
+
 ### SimpliRoute (Reporte Visitas/Rutas)
 - `GET /v1/reports/visits/from/{start}/to/{end}/?email={email}` - Reporte de visitas (api.simpliroute.com)
 - `GET /v1/reports/routes/from/{start}/to/{end}/?email={email}` - Reporte de rutas (api-gateway.simpliroute.com)
 - Auth: `Authorization: Token {API_TOKEN}`
+
+### SimpliRoute (Zonas KML)
+- `POST /v1/zones/` - Crear zona. Payload: `{ "name", "coordinates", "vehicles": [], "schedules": [] }`
+- `GET /v1/zones/` - Listar zonas de la cuenta (response: lista o `{results: [...]}`)
+- `DELETE /v1/zones/{id}/` - Eliminar zona por ID (204 o 200 = exito)
+- Auth: `Authorization: Token {API_TOKEN}` (token ingresado manualmente, no desde secrets)
+- `coordinates` es un string con formato Python: `[{'lat': '19.4','lng': '-99.1'},...]`
+- `schedules` siempre se incluye (lista vacia o dias en ingles: Monday, Tuesday, etc.)
+- Delay entre requests: 0.5s (ZONA_DELAY)
+
+## Flujo: Zonas KML
+1. Usuario ingresa token de API
+2. Elige modo: **Crear zonas desde KML** o **Eliminar zonas de la cuenta**
+3. **Modo Crear:**
+   - Sube archivo KML (exportado de Google My Maps u otra herramienta)
+   - Configura nombre de zona: usando atributos del KML (chips clicables para componer plantilla) o nombre generico secuencial
+   - Opcionalmente configura schedules desde un campo de dia del KML (soporta rangos "LUNES A VIERNES", listas, "TODOS LOS DIAS"; formato abreviado L-M-X-J-V-S-D)
+   - Preview de zonas antes de enviar
+   - Crea zonas una por una via POST con delay de 0.5s
+4. **Modo Eliminar:**
+   - Carga zonas existentes de la cuenta via GET
+   - Multiselect con todas las zonas seleccionadas por defecto
+   - Checkbox de confirmacion antes de eliminar
+   - Elimina una por una via DELETE con delay de 0.5s
+
+## Flujo: Unilever
+1. Usuario elige tipo de archivo maestro: **Archivo 4** (Ruteo Dinámico) o **Archivo 1** (Monitoreo de Pedidos)
+2. Sube el archivo maestro (CSV o Excel):
+   - Archivo 4: columnas `ID`, `Carga 2`→load_2, `Carga 3`→load_3, `Hora Inicial`→window_start, `Hora Final`→window_end
+   - Archivo 1: columnas `Código`→ID, `Total + Impuestos`→load_2, `Cant. Pedido`→load_3 (sin ventanas horarias)
+3. Selecciona fecha del ruteo
+4. Sube archivos por agencia (Excel .xlsx con columna `ID`), uno por tab
+5. Al procesar: consulta visitas de la fecha en cada cuenta, cruza `reference` API con `ID` del archivo agencia y del maestro
+6. Edita en lotes via PUT. Muestra request y response por bloque (expandido si hay error)
+7. **Excepcion Monterrey:** ademas de load_2/load_3, actualiza window_start/window_end (solo con Archivo 4)
+- Agencias: Tláhuac, Monterrey, Hermosillo, Mérida, Mexicali
+- Columnas normalizadas automaticamente (español → nombre interno) via `_COLUMN_MAP` en unilever.py
+- IDs vacios o con valor literal "None" se filtran y no se procesan
