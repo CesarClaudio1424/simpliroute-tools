@@ -105,13 +105,21 @@ def buscar_por_id(visit_id):
 
 # --- PUT limpieza ---
 
-def limpiar_visita(visit_id):
+def limpiar_visita(visita):
+    visit_id = visita["id"]
     url = f"{API_BASE}/routes/visits/{visit_id}"
+    payload = {
+        "reference": "",
+        "planned_date": "",
+        "route": "",
+        "title": visita.get("title", ""),
+        "address": visita.get("address", ""),
+    }
     try:
         r = requests.put(
             url,
             headers=_headers(),
-            json={"reference": "", "planned_date": "", "route": ""},
+            json=payload,
             timeout=REQUEST_TIMEOUT,
         )
         return r.status_code, r.text
@@ -285,14 +293,14 @@ def pagina_eliminar_bat():
     barra, contador, contenedor_errores = create_progress_tracker(total, "Limpiando visitas...")
 
     for i, r in enumerate(encontradas):
-        visit_id = r["visita"]["id"]
-        status, resp_text = limpiar_visita(visit_id)
+        visita = r["visita"]
+        status, resp_text = limpiar_visita(visita)
         prefijo = "Ref" if r["modo"] == "Reference" else "ID"
         if 200 <= status < 300:
             exitosos += 1
         else:
             with contenedor_errores:
-                render_error_item(f"{prefijo} {r['valor']} (ID {visit_id}) — Error HTTP {status}: {resp_text}")
+                render_error_item(f"{prefijo} {r['valor']} (ID {visita['id']}) — Error HTTP {status}: {resp_text}")
         update_progress(barra, contador, i + 1, total)
 
     finish_progress(barra)
