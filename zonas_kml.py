@@ -364,7 +364,7 @@ def pagina_zonas_kml():
                             st.rerun()
 
         # --- Sesion de eliminacion activa ---
-        if st.session_state.get("_kml_del_active"):
+        else:
             queue = st.session_state.get("_kml_del_queue", [])
             total_del = st.session_state["_kml_del_total"]
             procesados = total_del - len(queue)
