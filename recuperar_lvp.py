@@ -1,15 +1,25 @@
 import streamlit as st
 import requests
+import pandas as pd
 from datetime import date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import API_BASE, REQUEST_TIMEOUT
 from utils import (
     render_header, render_guide, render_label, render_stat,
-    render_error_item, load_secret, create_progress_tracker,
-    update_progress, finish_progress,
+    render_error_item, render_cuenta_badge, load_secret,
+    create_progress_tracker, update_progress, finish_progress,
 )
 
 FALLBACK_DAYS = 30
+
+
+@st.cache_data
+def cargar_cuentas():
+    try:
+        df = pd.read_csv("cuentas.csv")
+        return pd.Series(df.id.astype(str).values, index=df.nombre).to_dict()
+    except FileNotFoundError:
+        return None
 
 
 def _headers(token):
@@ -104,27 +114,42 @@ def pagina_recuperar_lvp():
 
     render_guide(
         steps=[
-            "<strong>Agrega filas</strong> — Ingresa la referencia de la visita, el nombre del vehiculo destino y la fecha de la ruta.",
-            "<strong>Busqueda automatica</strong> — Se busca primero por referencia directa. Si no se encuentra, se busca en un rango de \u00b130 dias en paralelo.",
-            "<strong>Asignacion</strong> — La visita encontrada se asigna a la ruta del vehiculo en la fecha indicada via PUT.",
+            "<strong>Selecciona la cuenta</strong> — Elige la tienda Liverpool donde buscar las visitas.",
+            "<strong>Agrega filas</strong> — Referencia de la visita, nombre del vehiculo destino y fecha de la ruta.",
+            "<strong>Buscar</strong> — Se busca primero por referencia directa; si no aparece, se escanea un rango de \u00b130 dias en paralelo.",
+            "<strong>Procesar</strong> — Revisa los resultados y confirma la asignacion a la ruta.",
         ],
         tip="El nombre del vehiculo debe coincidir (sin importar mayusculas/minusculas) con el registrado en SimpliRoute.",
     )
 
-    # --- Session state ---
+    # --- Cuenta Liverpool ---
+    cuentas = cargar_cuentas()
+    if cuentas is None:
+        st.error("No se encontro el archivo `cuentas.csv`.")
+        st.stop()
+
+    render_label("Paso 1 \u00b7 Cuenta Liverpool")
+    cuenta_nombre = st.selectbox(
+        "Cuenta",
+        list(cuentas.keys()),
+        label_visibility="collapsed",
+        key="recuperar_cuenta",
+    )
+    render_cuenta_badge(f"Cuenta seleccionada: <strong>{cuenta_nombre}</strong> (ID: {cuentas[cuenta_nombre]})")
+
+    # --- Session state para filas ---
     if "recuperar_filas" not in st.session_state:
         st.session_state.recuperar_filas = [
             {"reference": "", "vehiculo": "", "fecha": date.today()}
         ]
 
-    # --- Cabecera de columnas ---
-    render_label("Visitas a recuperar")
+    # --- Filas dinamicas ---
+    render_label("Paso 2 \u00b7 Visitas a recuperar")
     h1, h2, h3, _ = st.columns([3, 3, 2, 1])
     h1.markdown('<div class="sr-label" style="margin-bottom:0.2rem;">Referencia</div>', unsafe_allow_html=True)
     h2.markdown('<div class="sr-label" style="margin-bottom:0.2rem;">Vehiculo</div>', unsafe_allow_html=True)
     h3.markdown('<div class="sr-label" style="margin-bottom:0.2rem;">Fecha</div>', unsafe_allow_html=True)
 
-    # --- Filas dinamicas ---
     for i, fila in enumerate(st.session_state.recuperar_filas):
         col1, col2, col3, col4 = st.columns([3, 3, 2, 1])
         with col1:
@@ -155,6 +180,7 @@ def pagina_recuperar_lvp():
             if len(st.session_state.recuperar_filas) > 1:
                 if st.button("\u2715", key=f"del_{i}", use_container_width=True):
                     st.session_state.recuperar_filas.pop(i)
+                    st.session_state.pop("recuperar_resultados", None)
                     st.rerun()
 
     if st.button("+ Agregar fila", key="btn_agregar"):
@@ -169,59 +195,125 @@ def pagina_recuperar_lvp():
         f for f in st.session_state.recuperar_filas
         if f["reference"].strip() and f["vehiculo"].strip()
     ]
-    st.markdown(render_stat(len(filas_validas), "visitas a procesar"), unsafe_allow_html=True)
 
-    if not st.button("Recuperar visitas", type="primary", key="btn_recuperar"):
+    # --- Boton Buscar ---
+    if st.button("Buscar visitas y rutas", key="btn_buscar"):
+        if not filas_validas:
+            st.warning("Ingresa al menos una referencia y vehiculo.")
+        else:
+            st.session_state.pop("recuperar_resultados", None)
+            total_busqueda = len(filas_validas)
+            barra_buscar = st.progress(0, text="Buscando...")
+            resultados = []
+
+            for i, fila in enumerate(filas_validas):
+                reference = fila["reference"].strip()
+                vehiculo = fila["vehiculo"].strip()
+                fecha_str = fila["fecha"].strftime("%Y-%m-%d")
+                fecha_display = fila["fecha"].strftime("%d/%m/%Y")
+
+                barra_buscar.progress((i + 0.3) / total_busqueda, text=f"Buscando referencia {reference}...")
+                visita = buscar_por_reference(reference, token)
+                if not visita:
+                    barra_buscar.progress((i + 0.6) / total_busqueda, text=f"Fallback fechas {reference}...")
+                    visita = buscar_por_fechas(reference, token)
+
+                barra_buscar.progress((i + 0.9) / total_busqueda, text=f"Buscando ruta para {vehiculo}...")
+                route_id = obtener_ruta_id(vehiculo, fecha_str, token) if visita else None
+
+                resultados.append({
+                    "reference": reference,
+                    "vehiculo": vehiculo,
+                    "fecha_str": fecha_str,
+                    "fecha_display": fecha_display,
+                    "visita": visita,
+                    "route_id": route_id,
+                })
+                barra_buscar.progress((i + 1) / total_busqueda, text=f"{i+1}/{total_busqueda} procesadas")
+
+            barra_buscar.progress(1.0, text="Busqueda completada")
+            st.session_state.recuperar_resultados = resultados
+
+    # --- Mostrar resultados ---
+    if "recuperar_resultados" not in st.session_state:
         st.stop()
 
-    if not filas_validas:
-        st.warning("Ingresa al menos una referencia y vehiculo.")
+    resultados = st.session_state.recuperar_resultados
+    listos = [r for r in resultados if r["visita"] and r["route_id"]]
+    sin_visita = [r for r in resultados if not r["visita"]]
+    sin_ruta = [r for r in resultados if r["visita"] and not r["route_id"]]
+
+    render_label("Resultados de busqueda")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(render_stat(len(listos), "listos para procesar"), unsafe_allow_html=True)
+    with col2:
+        st.markdown(
+            render_stat(
+                len(sin_ruta),
+                "visita ok, ruta no encontrada",
+                style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);",
+            ),
+            unsafe_allow_html=True,
+        )
+    with col3:
+        st.markdown(
+            render_stat(
+                len(sin_visita),
+                "visita no encontrada",
+                style="background: linear-gradient(135deg, #d32f2f 0%, #b71c1c 100%);",
+            ),
+            unsafe_allow_html=True,
+        )
+
+    for r in resultados:
+        if r["visita"] and r["route_id"]:
+            icon = "\u2713"
+            color = "#29AB55"
+            detalle = f"ID visita {r['visita']['id']} \u2192 ruta asignada el {r['fecha_display']}"
+        elif r["visita"]:
+            icon = "\u26a0"
+            color = "#f59e0b"
+            detalle = f"Visita encontrada (ID {r['visita']['id']}) pero vehiculo '{r['vehiculo']}' sin ruta el {r['fecha_display']}"
+        else:
+            icon = "\u2717"
+            color = "#d32f2f"
+            detalle = "No encontrada en SimpliRoute"
+
+        st.markdown(
+            f'<div class="sr-result" style="border-left: 3px solid {color}; margin-bottom:0.4rem; padding:0.5rem 0.8rem;">'
+            f'<span style="color:{color}; font-weight:700;">{icon}</span> '
+            f'<strong>{r["reference"]}</strong> — {detalle}</div>',
+            unsafe_allow_html=True,
+        )
+
+    if not listos:
         st.stop()
 
-    # --- Procesamiento ---
-    total = len(filas_validas)
+    st.markdown("---")
+
+    # --- Boton Procesar ---
+    if not st.button(f"Procesar {len(listos)} visita(s)", type="primary", key="btn_procesar"):
+        st.stop()
+
+    total = len(listos)
     exitosos = 0
+    barra, contador, contenedor_errores = create_progress_tracker(total, "Asignando visitas...")
 
-    barra, contador, contenedor_errores = create_progress_tracker(total, "Procesando visitas...")
-
-    for i, fila in enumerate(filas_validas):
-        reference = fila["reference"].strip()
-        vehiculo = fila["vehiculo"].strip()
-        fecha_str = fila["fecha"].strftime("%Y-%m-%d")
-        fecha_display = fila["fecha"].strftime("%d/%m/%Y")
-
-        # 1. Buscar visita por reference, con fallback por fechas
-        visita = buscar_por_reference(reference, token)
-        if not visita:
-            visita = buscar_por_fechas(reference, token)
-
-        if not visita:
-            with contenedor_errores:
-                render_error_item(f"Ref {reference} — No encontrada en SimpliRoute")
-            update_progress(barra, contador, i + 1, total)
-            continue
-
-        # 2. Obtener route_id del vehiculo en la fecha
-        route_id = obtener_ruta_id(vehiculo, fecha_str, token)
-        if not route_id:
-            with contenedor_errores:
-                render_error_item(f"Ref {reference} — Vehiculo '{vehiculo}' sin ruta el {fecha_display}")
-            update_progress(barra, contador, i + 1, total)
-            continue
-
-        # 3. Asignar visita a la ruta
-        status = asignar_visita(visita["id"], route_id, fecha_str, token)
+    for i, r in enumerate(listos):
+        status = asignar_visita(r["visita"]["id"], r["route_id"], r["fecha_str"], token)
         if 200 <= status < 300:
             exitosos += 1
         else:
             with contenedor_errores:
-                render_error_item(f"Ref {reference} — Error al asignar (HTTP {status})")
-
+                render_error_item(f"Ref {r['reference']} — Error al asignar (HTTP {status})")
         update_progress(barra, contador, i + 1, total)
 
     finish_progress(barra)
 
     if exitosos > 0:
-        st.success(f"{exitosos} de {total} visitas recuperadas correctamente")
+        st.success(f"{exitosos} de {total} visitas asignadas correctamente")
+        st.session_state.pop("recuperar_resultados", None)
     if exitosos < total:
-        st.error(f"{total - exitosos} visita(s) con error")
+        st.error(f"{total - exitosos} visita(s) con error al asignar")
