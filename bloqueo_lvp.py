@@ -17,7 +17,7 @@ CONFIGS = [
 @st.cache_data
 def cargar_cuentas():
     try:
-        df = pd.read_csv("cuentas.csv")
+        df = pd.read_csv("cuentas.csv", encoding="latin-1")
         return pd.Series(df.id.astype(str).values, index=df.nombre).to_dict()
     except FileNotFoundError:
         return None
