@@ -309,8 +309,17 @@ def pagina_zonas_kml():
         render_tip("Ingresa el token de la cuenta SimpliRoute donde se crearan las zonas.")
         st.stop()
 
-    # --- Eliminar zonas existentes ---
-    with st.expander("🗑️ Eliminar zonas de la cuenta", expanded=False):
+    # --- Modo ---
+    modo = st.radio(
+        "Accion",
+        ["Crear zonas desde KML", "Eliminar zonas de la cuenta"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="kml_modo",
+    )
+
+    if modo == "Eliminar zonas de la cuenta":
+        st.markdown("---")
         # Clear cache if token changed
         if st.session_state.get("_kml_del_token") != token:
             st.session_state.pop("_kml_zonas_lista", None)
@@ -370,6 +379,8 @@ def pagina_zonas_kml():
                             st.warning(f"{exitosos_del} de {total_del} zonas eliminadas. Revisa los errores.")
                         else:
                             st.error("No se pudo eliminar ninguna zona.")
+
+        st.stop()
 
     # --- Upload KML ---
     render_label("Archivo KML")
