@@ -16,7 +16,8 @@ FALLBACK_DAYS = 30
 @st.cache_data
 def cargar_cuentas():
     try:
-        df = pd.read_csv("cuentas.csv", encoding="utf-8-sig")
+        df = pd.read_csv("cuentas.csv")
+        df.columns = [c.strip().lower() for c in df.columns]
         return {
             str(row["nombre"]).strip(): {"id": str(row["id"]).strip(), "token": str(row["token"]).strip()}
             for _, row in df.iterrows()
