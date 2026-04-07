@@ -324,6 +324,45 @@ def pagina_zonas_kml():
                 st.session_state.pop(k, None)
             st.session_state["_kml_del_token"] = token
 
+        # --- Lista de zonas ---
+        if not st.session_state.get("_kml_del_active"):
+            if st.button("Leer zonas de la cuenta", key="kml_btn_cargar_zonas"):
+                zonas_api, err_api = _listar_zonas(token)
+                if err_api:
+                    st.error(f"Error al cargar zonas: {err_api}")
+                else:
+                    st.session_state["_kml_zonas_lista"] = zonas_api
+
+            zonas_lista = st.session_state.get("_kml_zonas_lista")
+            if zonas_lista is not None:
+                if not zonas_lista:
+                    render_tip("La cuenta no tiene zonas registradas.")
+                else:
+                    st.markdown(render_stat(len(zonas_lista), "zonas en la cuenta"), unsafe_allow_html=True)
+                    opciones = [f"{z['name']} (#{z['id']})" for z in zonas_lista]
+                    seleccion = st.multiselect(
+                        "Zonas a eliminar",
+                        opciones,
+                        default=opciones,
+                        key="kml_zonas_sel",
+                    )
+                    zonas_a_eliminar = [zonas_lista[i] for i, opt in enumerate(opciones) if opt in seleccion]
+
+                    if zonas_a_eliminar:
+                        confirmar_del = st.checkbox(
+                            f"Confirmo que quiero eliminar {len(zonas_a_eliminar)} zona(s)",
+                            key="kml_confirmar_del",
+                        )
+                        if confirmar_del and st.button(
+                            "Eliminar zonas seleccionadas", type="primary", key="btn_eliminar_zonas"
+                        ):
+                            st.session_state["_kml_del_active"] = True
+                            st.session_state["_kml_del_queue"] = zonas_a_eliminar
+                            st.session_state["_kml_del_total"] = len(zonas_a_eliminar)
+                            st.session_state["_kml_del_done"] = 0
+                            st.session_state["_kml_del_errors"] = []
+                            st.rerun()
+
         # --- Sesion de eliminacion activa ---
         if st.session_state.get("_kml_del_active"):
             queue = st.session_state.get("_kml_del_queue", [])
@@ -331,7 +370,6 @@ def pagina_zonas_kml():
             procesados = total_del - len(queue)
             errores_del: list[dict] = st.session_state["_kml_del_errors"]
 
-            # Progreso
             st.progress(min(procesados / total_del, 1.0), text="Eliminando zonas...")
             col_stat_del, col_cancel = st.columns([4, 1])
             with col_stat_del:
@@ -345,13 +383,11 @@ def pagina_zonas_kml():
                     st.warning(f"Proceso cancelado. {done_so_far} zona(s) eliminadas antes de cancelar.")
                     st.stop()
 
-            # Errores acumulados
             for err_item in errores_del:
                 with st.expander(f"✗ {err_item['label']}", expanded=True):
                     st.code(f"DELETE {err_item['url']}", language=None)
                     st.code(err_item["detail"], language=None)
 
-            # Procesar siguiente o finalizar
             if queue:
                 next_zone = queue[0]
                 ok_d, url_d, det_d = _eliminar_zona_api(token, next_zone["id"])
@@ -367,7 +403,6 @@ def pagina_zonas_kml():
                 time.sleep(ZONA_DELAY)
                 st.rerun()
             else:
-                # Terminado
                 st.session_state["_kml_del_active"] = False
                 exitosos_del = st.session_state["_kml_del_done"]
                 st.session_state.pop("_kml_zonas_lista", None)
@@ -377,95 +412,7 @@ def pagina_zonas_kml():
                     st.warning(f"{exitosos_del} de {total_del} zonas eliminadas.")
                 else:
                     st.error("No se pudo eliminar ninguna zona.")
-            st.stop()
 
-        # --- Lista de zonas ---
-        if st.button("Leer zonas de la cuenta", key="kml_btn_cargar_zonas"):
-            zonas_api, err_api = _listar_zonas(token)
-            if err_api:
-                st.error(f"Error al cargar zonas: {err_api}")
-            else:
-                st.session_state["_kml_zonas_lista"] = zonas_api
-
-        zonas_lista = st.session_state.get("_kml_zonas_lista")
-        if zonas_lista is not None:
-            if not zonas_lista:
-                render_tip("La cuenta no tiene zonas registradas.")
-            else:
-                st.markdown(render_stat(len(zonas_lista), "zonas en la cuenta"), unsafe_allow_html=True)
-                opciones = [f"{z['name']} (#{z['id']})" for z in zonas_lista]
-                seleccion = st.multiselect(
-                    "Zonas a eliminar",
-                    opciones,
-                    default=opciones,
-                    key="kml_zonas_sel",
-                )
-                zonas_a_eliminar = [zonas_lista[i] for i, opt in enumerate(opciones) if opt in seleccion]
-
-                if zonas_a_eliminar:
-                    confirmar_del = st.checkbox(
-                        f"Confirmo que quiero eliminar {len(zonas_a_eliminar)} zona(s)",
-                        key="kml_confirmar_del",
-                    )
-                    if confirmar_del and st.button(
-                        "Eliminar zonas seleccionadas", type="primary", key="btn_eliminar_zonas"
-                    ):
-                        st.session_state["_kml_del_active"] = True
-                        st.session_state["_kml_del_queue"] = zonas_a_eliminar
-                        st.session_state["_kml_del_total"] = len(zonas_a_eliminar)
-                        st.session_state["_kml_del_done"] = 0
-                        st.session_state["_kml_del_errors"] = []
-                        st.rerun()
-
-        st.stop()
-
-    # --- Sesion de creacion activa ---
-    if st.session_state.get("_kml_crear_active"):
-        queue_cr = st.session_state.get("_kml_crear_queue", [])
-        total_cr = st.session_state["_kml_crear_total"]
-        procesados_cr = total_cr - len(queue_cr)
-        errores_cr: list[dict] = st.session_state["_kml_crear_errors"]
-
-        st.markdown("---")
-        st.progress(min(procesados_cr / total_cr, 1.0), text="Creando zonas...")
-        col_stat_cr, col_cancel_cr = st.columns([4, 1])
-        with col_stat_cr:
-            st.markdown(render_stat(f"{procesados_cr}/{total_cr}", "creadas"), unsafe_allow_html=True)
-        with col_cancel_cr:
-            st.markdown('<div style="padding-top:1.4rem;"></div>', unsafe_allow_html=True)
-            if queue_cr and st.button("Cancelar", key="kml_btn_cancelar_crear", use_container_width=True):
-                st.session_state["_kml_crear_active"] = False
-                st.session_state.pop("_kml_crear_queue", None)
-                done_cr = st.session_state.get("_kml_crear_done", 0)
-                st.warning(f"Proceso cancelado. {done_cr} zona(s) creadas antes de cancelar.")
-                st.stop()
-
-        for err_item in errores_cr:
-            with st.expander(f"✗ {err_item['label']}", expanded=True):
-                st.code(err_item["detail"], language=None)
-
-        if queue_cr:
-            next_cr = queue_cr[0]
-            ok_c, det_c = _crear_zona(token, next_cr["nombre"], next_cr["coords"], next_cr["schedules"])
-            if ok_c:
-                st.session_state["_kml_crear_done"] += 1
-            else:
-                st.session_state["_kml_crear_errors"].append({
-                    "label": f"Zona \u00ab{next_cr['nombre']}\u00bb",
-                    "detail": det_c,
-                })
-            st.session_state["_kml_crear_queue"] = queue_cr[1:]
-            time.sleep(ZONA_DELAY)
-            st.rerun()
-        else:
-            st.session_state["_kml_crear_active"] = False
-            exitosos_cr = st.session_state["_kml_crear_done"]
-            if exitosos_cr == total_cr:
-                st.success(f"Todas las zonas creadas correctamente ({exitosos_cr}/{total_cr})")
-            elif exitosos_cr > 0:
-                st.warning(f"{exitosos_cr} de {total_cr} zonas creadas.")
-            else:
-                st.error("No se pudo crear ninguna zona. Revisa el token y los errores.")
         st.stop()
 
     # --- Upload KML ---
@@ -675,18 +622,64 @@ def pagina_zonas_kml():
 
     # --- Crear zonas ---
     st.markdown("---")
-    if st.button("Crear zonas en SimpliRoute", type="primary", key="btn_crear_zonas"):
-        queue_items = [
-            {
-                "nombre": nombre,
-                "coords": _format_coordinates(z["coords"]),
-                "schedules": schedules_por_zona[i] if schedules_por_zona[i] else None,
-            }
-            for i, (z, nombre) in enumerate(zip(zones, nombres_finales))
-        ]
-        st.session_state["_kml_crear_active"] = True
-        st.session_state["_kml_crear_queue"] = queue_items
-        st.session_state["_kml_crear_total"] = len(queue_items)
-        st.session_state["_kml_crear_done"] = 0
-        st.session_state["_kml_crear_errors"] = []
-        st.rerun()
+    if st.session_state.get("_kml_crear_active"):
+        queue_cr = st.session_state.get("_kml_crear_queue", [])
+        total_cr = st.session_state["_kml_crear_total"]
+        procesados_cr = total_cr - len(queue_cr)
+        errores_cr: list[dict] = st.session_state["_kml_crear_errors"]
+
+        st.progress(min(procesados_cr / total_cr, 1.0), text="Creando zonas...")
+        col_stat_cr, col_cancel_cr = st.columns([4, 1])
+        with col_stat_cr:
+            st.markdown(render_stat(f"{procesados_cr}/{total_cr}", "creadas"), unsafe_allow_html=True)
+        with col_cancel_cr:
+            st.markdown('<div style="padding-top:1.4rem;"></div>', unsafe_allow_html=True)
+            if queue_cr and st.button("Cancelar", key="kml_btn_cancelar_crear", use_container_width=True):
+                st.session_state["_kml_crear_active"] = False
+                st.session_state.pop("_kml_crear_queue", None)
+                done_cr = st.session_state.get("_kml_crear_done", 0)
+                st.warning(f"Proceso cancelado. {done_cr} zona(s) creadas antes de cancelar.")
+                st.stop()
+
+        for err_item in errores_cr:
+            with st.expander(f"✗ {err_item['label']}", expanded=True):
+                st.code(err_item["detail"], language=None)
+
+        if queue_cr:
+            next_cr = queue_cr[0]
+            ok_c, det_c = _crear_zona(token, next_cr["nombre"], next_cr["coords"], next_cr["schedules"])
+            if ok_c:
+                st.session_state["_kml_crear_done"] += 1
+            else:
+                st.session_state["_kml_crear_errors"].append({
+                    "label": f"Zona \u00ab{next_cr['nombre']}\u00bb",
+                    "detail": det_c,
+                })
+            st.session_state["_kml_crear_queue"] = queue_cr[1:]
+            time.sleep(ZONA_DELAY)
+            st.rerun()
+        else:
+            st.session_state["_kml_crear_active"] = False
+            exitosos_cr = st.session_state["_kml_crear_done"]
+            if exitosos_cr == total_cr:
+                st.success(f"Todas las zonas creadas correctamente ({exitosos_cr}/{total_cr})")
+            elif exitosos_cr > 0:
+                st.warning(f"{exitosos_cr} de {total_cr} zonas creadas.")
+            else:
+                st.error("No se pudo crear ninguna zona. Revisa el token y los errores.")
+    else:
+        if st.button("Crear zonas en SimpliRoute", type="primary", key="btn_crear_zonas"):
+            queue_items = [
+                {
+                    "nombre": nombre,
+                    "coords": _format_coordinates(z["coords"]),
+                    "schedules": schedules_por_zona[i] if schedules_por_zona[i] else None,
+                }
+                for i, (z, nombre) in enumerate(zip(zones, nombres_finales))
+            ]
+            st.session_state["_kml_crear_active"] = True
+            st.session_state["_kml_crear_queue"] = queue_items
+            st.session_state["_kml_crear_total"] = len(queue_items)
+            st.session_state["_kml_crear_done"] = 0
+            st.session_state["_kml_crear_errors"] = []
+            st.rerun()
