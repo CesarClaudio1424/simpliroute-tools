@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import API_BASE, REQUEST_TIMEOUT
 from utils import (
     render_header, render_guide, render_label, render_stat,
-    render_error_item, render_cuenta_badge, load_secret,
+    render_error_item, render_cuenta_badge,
     create_progress_tracker, update_progress, finish_progress,
 )
 
@@ -17,7 +17,10 @@ FALLBACK_DAYS = 30
 def cargar_cuentas():
     try:
         df = pd.read_csv("cuentas.csv")
-        return pd.Series(df.id.astype(str).values, index=df.nombre).to_dict()
+        return {
+            row.nombre: {"id": str(row.id), "token": str(row.token)}
+            for row in df.itertuples()
+        }
     except FileNotFoundError:
         return None
 
@@ -140,11 +143,6 @@ def pagina_recuperar_lvp():
         "Busca y asigna visitas Liverpool a su ruta y fecha correspondiente",
     )
 
-    token = load_secret(
-        "auth_token",
-        "No se encontro `auth_token` en `.streamlit/secrets.toml`. Configura `[api_config]` con `auth_token`.",
-    )
-
     render_guide(
         steps=[
             "<strong>Selecciona la cuenta</strong> — Elige la tienda Liverpool donde buscar las visitas.",
@@ -168,7 +166,9 @@ def pagina_recuperar_lvp():
         label_visibility="collapsed",
         key="recuperar_cuenta",
     )
-    render_cuenta_badge(f"Cuenta seleccionada: <strong>{cuenta_nombre}</strong> (ID: {cuentas[cuenta_nombre]})")
+    cuenta = cuentas[cuenta_nombre]
+    token = cuenta["token"]
+    render_cuenta_badge(f"Cuenta seleccionada: <strong>{cuenta_nombre}</strong> (ID: {cuenta['id']})")
 
     # --- Session state para filas ---
     if "recuperar_filas" not in st.session_state:
