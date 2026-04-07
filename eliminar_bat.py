@@ -115,6 +115,7 @@ def limpiar_visita(visita):
         "title": visita.get("title") or "Unnamed",
         "address": visita.get("address") or "Unknown",
     }
+    info = {"url": url, "payload": payload, "status": None, "response": None}
     try:
         r = requests.put(
             url,
@@ -122,9 +123,15 @@ def limpiar_visita(visita):
             json=payload,
             timeout=REQUEST_TIMEOUT,
         )
-        return r.status_code, r.text
+        info["status"] = r.status_code
+        try:
+            info["response"] = r.json()
+        except Exception:
+            info["response"] = r.text
+        return r.status_code, info
     except requests.exceptions.RequestException as e:
-        return 0, str(e)
+        info["response"] = str(e)
+        return 0, info
 
 
 # --- Pagina ---
@@ -294,13 +301,18 @@ def pagina_eliminar_bat():
 
     for i, r in enumerate(encontradas):
         visita = r["visita"]
-        status, resp_text = limpiar_visita(visita)
+        status, info = limpiar_visita(visita)
         prefijo = "Ref" if r["modo"] == "Reference" else "ID"
         if 200 <= status < 300:
             exitosos += 1
         else:
             with contenedor_errores:
-                render_error_item(f"{prefijo} {r['valor']} (ID {visita['id']}) — Error HTTP {status}: {resp_text}")
+                st.markdown(f"### ✗ {prefijo} {r['valor']} (ID {visita['id']}) — Error HTTP {status}")
+                st.code(f"PUT {info['url']}", language="bash")
+                st.markdown("**Payload:**")
+                st.json(info["payload"])
+                st.markdown("**Response:**")
+                st.json(info["response"])
         update_progress(barra, contador, i + 1, total)
 
     finish_progress(barra)
