@@ -286,15 +286,15 @@ def _crear_zona(token: str, name: str, coordinates: str, schedules: list[str] | 
 # ---------------------------------------------------------------------------
 
 def pagina_zonas_kml():
-    render_header("Zonas KML", "Carga poligonos desde archivos KML y crealos como zonas en SimpliRoute")
+    render_header("Zonas KML", "Crea zonas desde archivos KML o elimina zonas existentes de una cuenta SimpliRoute")
 
     render_guide(
         steps=[
-            "<strong>Token</strong> — Ingresa el token de la cuenta donde se crearan las zonas.",
-            "<strong>Sube el KML</strong> — Exporta el archivo desde Google My Maps u otra herramienta. Puede tener multiples poligonos.",
-            "<strong>Configura el nombre</strong> — Haz clic en los campos para componerlo o usa nombres genericos secuenciales.",
-            "<strong>Revisa el preview</strong> — Confirma los nombres y cantidad de puntos antes de enviar.",
-            "<strong>Crea las zonas</strong> — Se envian una por una con un intervalo de 0.5 s. Solo se muestran los errores.",
+            "<strong>Token</strong> — Ingresa el token de la cuenta donde operar.",
+            "<strong>Elige el modo</strong> — <em>Crear zonas desde KML</em> para subir un archivo, o <em>Eliminar zonas de la cuenta</em> para borrar zonas existentes.",
+            "<strong>Crear:</strong> Sube el KML, configura el nombre con los campos del archivo y revisa el preview antes de enviar.",
+            "<strong>Eliminar:</strong> Carga las zonas de la cuenta, selecciona las que quieres borrar y confirma.",
+            "<strong>Procesa</strong> — Las operaciones se ejecutan una por una con un intervalo de 0.5 s. Solo se muestran los errores.",
         ],
         tip="El archivo KML puede venir de Google My Maps (Exportar capa > KML). Cada poligono del KML se convierte en una zona de SimpliRoute.",
     )
