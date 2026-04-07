@@ -16,9 +16,9 @@ FALLBACK_DAYS = 30
 @st.cache_data
 def cargar_cuentas():
     try:
-        df = pd.read_csv("cuentas.csv")
+        df = pd.read_csv("cuentas.csv", encoding="utf-8-sig")
         return {
-            row.nombre: {"id": str(row.id), "token": str(row.token)}
+            str(row.nombre).strip(): {"id": str(row.id).strip(), "token": str(row.token).strip()}
             for row in df.itertuples()
         }
     except FileNotFoundError:
@@ -168,7 +168,8 @@ def pagina_recuperar_lvp():
     )
     cuenta = cuentas[cuenta_nombre]
     token = cuenta["token"]
-    render_cuenta_badge(f"Cuenta seleccionada: <strong>{cuenta_nombre}</strong> (ID: {cuenta['id']})")
+    token_preview = f"{token[:6]}...{token[-4:]}" if len(token) > 10 else token
+    render_cuenta_badge(f"Cuenta seleccionada: <strong>{cuenta_nombre}</strong> (ID: {cuenta['id']}) · Token: <code>{token_preview}</code>")
 
     # --- Session state para filas ---
     if "recuperar_filas" not in st.session_state:
