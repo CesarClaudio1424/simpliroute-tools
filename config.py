@@ -17,5 +17,5 @@ RETRY_BASE_DELAY = 2  # seconds, doubles each attempt (2, 4, 8)
 
 # Bulk edit
 EDIT_TIMEOUT = 240
-MAX_BLOCK_SIZE = 500
+MAX_BLOCK_SIZE = 400
 CLEANUP_NUM_BATCHES = 5
