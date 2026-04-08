@@ -24,9 +24,9 @@ def _headers(token):
     return {"Authorization": f"Token {token}", "Content-Type": "application/json"}
 
 
-def buscar_por_reference(reference, token):
-    """Busca visita por reference. Returns (visita | None, req_info dict)."""
-    url = f"{API_BASE}/routes/visits/reference/{reference}/"
+def buscar_visitas_por_fecha(planned_date, token):
+    """Obtiene todas las visitas de una fecha. Returns (lista de visitas, req_info dict)."""
+    url = f"{API_BASE}/routes/visits/?planned_date={planned_date}"
     info = {"url": url, "status": None, "response": None}
     try:
         r = requests.get(url, headers=_headers(token), timeout=REQUEST_TIMEOUT)
@@ -36,36 +36,26 @@ def buscar_por_reference(reference, token):
         except Exception:
             info["response"] = r.text
         if r.status_code == 200:
-            data = r.json()
-            # Respuesta paginada: {"count": N, "results": [...]}
-            if isinstance(data, dict) and "results" in data:
-                results = data["results"]
-                return (results[0] if results else None), info
-            if isinstance(data, list):
-                return (data[0] if data else None), info
-            if isinstance(data, dict) and data.get("id"):
-                return data, info
+            return r.json() or [], info
     except requests.exceptions.RequestException as e:
         info["response"] = str(e)
-    return None, info
+    return [], info
 
 
-def buscar_por_id(visit_id, token):
-    """Busca visita por ID directo. Returns (visita | None, req_info dict)."""
-    url = f"{API_BASE}/routes/visits/{visit_id}/"
-    info = {"url": url, "status": None, "response": None}
-    try:
-        r = requests.get(url, headers=_headers(token), timeout=REQUEST_TIMEOUT)
-        info["status"] = r.status_code
-        try:
-            info["response"] = r.json()
-        except Exception:
-            info["response"] = r.text
-        if r.status_code == 200:
-            return r.json(), info
-    except requests.exceptions.RequestException as e:
-        info["response"] = str(e)
-    return None, info
+def filtrar_visitas(visitas, valores, tipo_busqueda):
+    """Filtra visitas por reference o ID. Returns lista de visitas encontradas."""
+    encontradas = []
+    valores_set = set(str(v).lower() for v in valores)
+
+    for v in visitas:
+        if tipo_busqueda == "Reference":
+            if str(v.get("reference", "")).lower() in valores_set:
+                encontradas.append(v)
+        else:  # ID
+            if str(v.get("id", "")).lower() in valores_set:
+                encontradas.append(v)
+
+    return encontradas
 
 
 def editar_visitas_bloque(visitas, planned_date, token):
@@ -106,16 +96,19 @@ def pagina_mover_visitas_likewise():
         steps=[
             "<strong>Selecciona tipo de busqueda</strong> — Puedes buscar por Reference o por ID de visita.",
             "<strong>Elige la cuenta</strong> — Selecciona una de las cuatro cuentas Likewise.",
+            "<strong>Ingresa fecha de origen</strong> — La fecha en la que estan las visitas actualmente.",
             "<strong>Ingresa los valores</strong> — Referencias o IDs, uno por linea.",
             "<strong>Elige fecha destino</strong> — La fecha a la que se moveran las visitas.",
             "<strong>Busca y procesa</strong> — Se mostraran los resultados y se actualizaran en bloques de 500.",
         ],
-        tip="Puedes buscar multiples visitas a la vez ingresando varias referencias o IDs separadas por saltos de linea.",
+        tip="La busqueda filtra por fecha y luego por reference o ID, lo que es mas eficiente que buscar uno por uno.",
     )
 
     # Inicializar session_state
     if "mvl_visitas_encontradas" not in st.session_state:
         st.session_state.mvl_visitas_encontradas = None
+    if "mvl_fecha_origen_str" not in st.session_state:
+        st.session_state.mvl_fecha_origen_str = None
     if "mvl_fecha_destino_str" not in st.session_state:
         st.session_state.mvl_fecha_destino_str = None
     if "mvl_token" not in st.session_state:
@@ -146,8 +139,17 @@ def pagina_mover_visitas_likewise():
     if not token:
         st.stop()
 
-    # --- Paso 3: Ingreso de valores ---
-    render_label(f"Paso 3 · Ingresa {tipo_busqueda}s")
+    # --- Paso 3: Fecha de origen ---
+    render_label("Paso 3 · Fecha de origen")
+    fecha_origen = st.date_input(
+        "Fecha donde están las visitas",
+        value=date.today(),
+        label_visibility="collapsed",
+    )
+    fecha_origen_str = fecha_origen.strftime("%Y-%m-%d")
+
+    # --- Paso 4: Ingreso de valores ---
+    render_label(f"Paso 4 · Ingresa {tipo_busqueda}s")
     placeholder = f"Ingresa los {tipo_busqueda.lower()}s a buscar (uno por linea)"
     valores_input = st.text_area(
         "Valores",
@@ -162,8 +164,8 @@ def pagina_mover_visitas_likewise():
 
     valores = [line.strip() for line in valores_input.strip().split("\n") if line.strip()]
 
-    # --- Paso 4: Fecha destino ---
-    render_label("Paso 4 · Fecha destino")
+    # --- Paso 5: Fecha destino ---
+    render_label("Paso 5 · Fecha destino")
     fecha_destino = st.date_input(
         "Fecha",
         value=date.today(),
@@ -174,44 +176,37 @@ def pagina_mover_visitas_likewise():
     # --- Boton de busqueda ---
     st.markdown("---")
     if st.button("Buscar Visitas", use_container_width=True, type="primary"):
-        # Buscar todas las visitas
-        visitas_encontradas = []
-        no_encontradas = []
+        barra, contador, contenedor_errores = create_progress_tracker(1, f"Buscando visita(s) en {fecha_origen_str}...")
 
-        barra, contador, contenedor_errores = create_progress_tracker(len(valores), f"Buscando visita(s)...")
+        try:
+            # Obtener todas las visitas de la fecha de origen
+            todas_visitas, req_info = buscar_visitas_por_fecha(fecha_origen_str, token)
 
-        for idx, valor in enumerate(valores):
-            try:
-                if tipo_busqueda == "Reference":
-                    visita, req_info = buscar_por_reference(valor, token)
-                else:
-                    visita, req_info = buscar_por_id(valor, token)
+            with contenedor_errores:
+                with st.expander("📋 Request de busqueda", expanded=False):
+                    st.code(f"GET {req_info['url']}", language="bash")
+                    st.markdown(f"Status: `{req_info['status']}`")
 
-                if visita:
-                    # Mantener el valor original ingresado como reference si no viene en la respuesta
-                    if "reference" not in visita or not visita.get("reference"):
-                        visita["reference"] = valor
-                    visitas_encontradas.append(visita)
-                else:
-                    no_encontradas.append(valor)
-                    # Mostrar error en expander
-                    with contenedor_errores:
-                        with st.expander(f"❌ No encontrado: {valor}"):
-                            st.code(f"GET {req_info['url']}", language="bash")
-                            if req_info.get("status"):
-                                st.markdown(f"Status: `{req_info['status']}`")
-                            if req_info.get("response"):
-                                st.json(req_info["response"])
+            # Filtrar por reference o ID
+            visitas_encontradas = filtrar_visitas(todas_visitas, valores, tipo_busqueda)
+            no_encontradas = [v for v in valores if v not in [
+                str(vis.get("reference" if tipo_busqueda == "Reference" else "id", ""))
+                for vis in visitas_encontradas
+            ]]
 
-            except Exception as e:
-                no_encontradas.append(valor)
+            update_progress(barra, contador, 1, 1)
 
-            update_progress(barra, contador, idx + 1, len(valores))
+        except Exception as e:
+            with contenedor_errores:
+                st.error(f"Error al buscar: {str(e)}")
+            visitas_encontradas = []
+            no_encontradas = valores
 
         finish_progress(barra)
 
         # Guardar en session_state
         st.session_state.mvl_visitas_encontradas = visitas_encontradas
+        st.session_state.mvl_fecha_origen_str = fecha_origen_str
         st.session_state.mvl_fecha_destino_str = fecha_destino_str
         st.session_state.mvl_token = token
 
@@ -295,6 +290,7 @@ def pagina_mover_visitas_likewise():
 
                 # Limpiar session_state
                 st.session_state.mvl_visitas_encontradas = None
+                st.session_state.mvl_fecha_origen_str = None
                 st.session_state.mvl_fecha_destino_str = None
                 st.session_state.mvl_token = None
 
