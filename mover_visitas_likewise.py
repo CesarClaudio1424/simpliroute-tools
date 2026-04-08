@@ -171,7 +171,7 @@ def pagina_mover_visitas_likewise():
         no_encontradas = []
         errores = []
 
-        progress = create_progress_tracker(f"Buscando {len(valores)} visita(s)...")
+        barra, contador, contenedor_errores = create_progress_tracker(len(valores), f"Buscando visita(s)...")
 
         for idx, valor in enumerate(valores):
             try:
@@ -185,20 +185,21 @@ def pagina_mover_visitas_likewise():
                 else:
                     no_encontradas.append(valor)
                     # Mostrar error en expander
-                    with st.expander(f"❌ No encontrado: {valor}"):
-                        st.code(f"GET {req_info['url']}", language="bash")
-                        if req_info.get("status"):
-                            st.markdown(f"Status: `{req_info['status']}`")
-                        if req_info.get("response"):
-                            st.json(req_info["response"])
+                    with contenedor_errores:
+                        with st.expander(f"❌ No encontrado: {valor}"):
+                            st.code(f"GET {req_info['url']}", language="bash")
+                            if req_info.get("status"):
+                                st.markdown(f"Status: `{req_info['status']}`")
+                            if req_info.get("response"):
+                                st.json(req_info["response"])
 
             except Exception as e:
                 errores.append((valor, str(e)))
                 no_encontradas.append(valor)
 
-            update_progress(progress, idx + 1, len(valores))
+            update_progress(barra, contador, idx + 1, len(valores))
 
-        finish_progress(progress)
+        finish_progress(barra)
 
         # --- Estadisticas ---
         col1, col2, col3 = st.columns(3)
@@ -236,7 +237,7 @@ def pagina_mover_visitas_likewise():
                     for i in range(0, len(visitas_encontradas), MAX_BLOCK_SIZE)
                 ]
 
-                progress = create_progress_tracker(f"Moviendo {len(visitas_encontradas)} visita(s) en {len(bloques)} bloque(s)...")
+                barra, contador, contenedor_bloques = create_progress_tracker(len(bloques), f"Moviendo visita(s)...")
                 procesadas = 0
                 errores_edicion = []
 
@@ -245,21 +246,23 @@ def pagina_mover_visitas_likewise():
 
                     if success:
                         procesadas += len(bloque)
-                        with st.expander(f"✅ Bloque {bloque_idx + 1}/{len(bloques)} — {len(bloque)} visita(s)", expanded=False):
-                            st.code(f"PUT {API_BASE}/routes/visits/", language="bash")
-                            st.markdown(f"Status: `{status}`")
-                            st.json({"updated": len(bloque)})
+                        with contenedor_bloques:
+                            with st.expander(f"✅ Bloque {bloque_idx + 1}/{len(bloques)} — {len(bloque)} visita(s)", expanded=False):
+                                st.code(f"PUT {API_BASE}/routes/visits/", language="bash")
+                                st.markdown(f"Status: `{status}`")
+                                st.json({"updated": len(bloque)})
                     else:
                         errores_edicion.append((bloque_idx + 1, status, response))
-                        with st.expander(f"❌ Bloque {bloque_idx + 1}/{len(bloques)} — ERROR", expanded=True):
-                            st.code(f"PUT {API_BASE}/routes/visits/", language="bash")
-                            st.markdown(f"Status: `{status}`")
-                            st.json({"error": response})
+                        with contenedor_bloques:
+                            with st.expander(f"❌ Bloque {bloque_idx + 1}/{len(bloques)} — ERROR", expanded=True):
+                                st.code(f"PUT {API_BASE}/routes/visits/", language="bash")
+                                st.markdown(f"Status: `{status}`")
+                                st.json({"error": response})
 
-                    update_progress(progress, bloque_idx + 1, len(bloques))
+                    update_progress(barra, contador, bloque_idx + 1, len(bloques))
                     time.sleep(EDIT_DELAY)
 
-                finish_progress(progress)
+                finish_progress(barra)
 
                 # Resultado final
                 st.markdown("---")
