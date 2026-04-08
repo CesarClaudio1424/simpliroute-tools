@@ -1,15 +1,18 @@
 # SimpliRoute Tools
 
 ## Descripcion
-App Streamlit multi-herramienta con navegacion por sidebar. Incluye ocho herramientas:
+App Streamlit multi-herramienta con navegacion por sidebar. Incluye once herramientas:
 1. **Edicion Masiva de Visitas** — Sube un CSV y edita visitas en bloque via API SimpliRoute (PUT).
 2. **Webhooks Likewise** — Envia webhooks a Google Cloud Functions para procesar rutas/visitas del middleware Likewise (POST).
-3. **Bloqueo LVP** — Configura bloqueo de edicion y modo seguridad en cuentas Liverpool via API SimpliRoute (POST).
-4. **Reporte Visitas/Rutas** — Genera reportes por rango de fechas dividido en sub-intervalos y los envia por correo via API SimpliRoute (GET).
-5. **Checkout General** — Envia webhooks de checkout a SimpliRoute para rutas y visitas de cualquier cuenta (POST).
-6. **Unilever** — Actualiza cargas (load_2, load_3) y ventanas horarias por agencia via API SimpliRoute (PUT).
-7. **Zonas KML** — Crea zonas en SimpliRoute desde archivos KML (poligonos exportados de Google My Maps), o elimina zonas existentes de una cuenta.
-8. **Recuperar Visitas LVP** — Busca visitas Liverpool por referencia y las asigna a la ruta/fecha correcta (GET + PUT).
+3. **Mover Visitas Likewise** — Busca visitas por reference o ID y las mueve a una fecha destino en las 4 cuentas Likewise (GET + PUT).
+4. **Bloqueo LVP** — Configura bloqueo de edicion y modo seguridad en cuentas Liverpool via API SimpliRoute (POST).
+5. **Reporte Visitas/Rutas** — Genera reportes por rango de fechas dividido en sub-intervalos y los envia por correo via API SimpliRoute (GET).
+6. **Checkout General** — Envia webhooks de checkout a SimpliRoute para rutas y visitas de cualquier cuenta (POST).
+7. **Eliminacion de Items** — (herramienta secundaria)
+8. **Unilever** — Actualiza cargas (load_2, load_3) y ventanas horarias por agencia via API SimpliRoute (PUT).
+9. **Zonas KML** — Crea zonas en SimpliRoute desde archivos KML (poligonos exportados de Google My Maps), o elimina zonas existentes de una cuenta.
+10. **Recuperar Visitas LVP** — Busca visitas Liverpool por referencia y las asigna a la ruta/fecha correcta (GET + PUT).
+11. **Eliminar Visitas BAT** — (herramienta secundaria)
 
 ## Stack
 - **Python 3.12.3** con entorno virtual `.venv`
@@ -33,6 +36,7 @@ estilos.py                           # THEME dict + generador de CSS dinamico
 edicion.py                           # Pagina Edicion Masiva (UI + helpers API/CSV)
 pagina_webhooks.py                   # Pagina Webhooks Likewise (UI)
 webhook.py                           # Backend webhooks Likewise (URLs, envio HTTP)
+mover_visitas_likewise.py             # Pagina Mover Visitas Likewise (UI + busqueda/edicion por reference o ID)
 bloqueo_lvp.py                       # Pagina Bloqueo LVP (UI + API configs Liverpool)
 reporte_visitas.py                   # Pagina Reporte Visitas/Rutas (UI + API reportes)
 checkout_general.py                  # Pagina Checkout General (UI + API send-webhooks)
@@ -76,6 +80,18 @@ runtime.txt                          # Pin Python 3.12 para Streamlit Cloud
    - GET visitas por cada dia del rango, filtra las excluidas sin ruta asignada
    - PUT bulk a `/routes/visits/` en lotes (total / 5, max 500 por lote) con `route: ""`, `planned_date: 2020-01-01`
    - Timeout de 600s para consultas y edicion de limpieza
+
+## Flujo: Mover Visitas Likewise
+1. Usuario elige tipo de busqueda: **Reference** o **ID** de visita
+2. Selecciona una de las 4 cuentas Likewise (Telefonica, Entel, Omnicanalidad, Biobio)
+3. Ingresa valores a buscar (referencias o IDs, uno por linea)
+4. Elige fecha destino para mover las visitas
+5. Al procesar:
+   - GET busca cada valor: por reference (`/routes/visits/reference/{reference}/`) o por ID (`/routes/visits/{id}/`)
+   - Muestra visitas encontradas vs no encontradas
+   - Divide visitas en bloques (max 500) y envia via `PUT /routes/visits/`
+   - Respeta delay entre solicitudes (EDIT_DELAY de config.py)
+6. Muestra progreso en tiempo real, resultados por bloque, y estadisticas finales
 
 ## Flujo: Bloqueo LVP
 1. Token se carga automaticamente desde `st.secrets.api_config.auth_token`
@@ -137,6 +153,14 @@ streamlit run main.py
 - `POST /v1/mobile/send-webhooks` - Envio de webhooks para rutas/visitas
 - Payload: `{ "account_ids": [int], "planned_date": "YYYY-MM-DD", "route_ids"|"visit_ids": [int] }`
 - Auth: `Authorization: Token {CHECKOUT_TOKEN}` (desde secrets)
+
+### SimpliRoute (Mover Visitas Likewise)
+- `GET /v1/routes/visits/reference/{reference}/` - Busqueda por reference (respuesta paginada `{count, results}` o lista)
+- `GET /v1/routes/visits/{id}/` - Busqueda por ID directo
+- `PUT /v1/routes/visits/` - Edicion bulk: actualiza planned_date de visitas
+- Auth: `Authorization: Token {token_cuenta}` (desde secrets: token_telefonica, token_entel, token_omnicanalidad, token_biobio)
+- Payload: array de objetos con id, reference, title, address, planned_date (nueva fecha)
+- Bloqueo maximo: 500 visitas por request, delay entre bloques de EDIT_DELAY segundos
 
 ### SimpliRoute (Unilever)
 - `GET /v1/routes/visits/?planned_date={YYYY-MM-DD}` - Obtener visitas por fecha para cruzar references
