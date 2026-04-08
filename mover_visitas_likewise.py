@@ -195,29 +195,14 @@ def pagina_mover_visitas_likewise():
         barra, contador, contenedor_errores = create_progress_tracker(1, f"Buscando visita(s) en {fecha_origen_str}...")
 
         try:
-            # Debug: mostrar token parcialmente
-            token_debug = token[:10] + "..." + token[-10:] if token else "SIN TOKEN"
-
-            st.info(f"🔍 **Debug Info:**\n- URL: `{API_BASE}/routes/visits/?planned_date={fecha_origen_str}`\n- Token: `{token_debug}`\n- Tipo búsqueda: {tipo_busqueda}\n- Valores a buscar: {', '.join(valores)}")
-
             # Obtener todas las visitas de la fecha de origen
             todas_visitas, req_info = buscar_visitas_por_fecha(fecha_origen_str, token)
 
-            with contenedor_errores:
-                with st.expander("📋 Request de busqueda (expandir para detalles)", expanded=True):
-                    st.code(f"GET {req_info['url']}", language="bash")
-                    st.markdown(f"**Status:** `{req_info['status']}`")
-                    st.markdown(f"**Total de visitas en {fecha_origen_str}:** `{len(todas_visitas)}`")
-                    if req_info.get('error'):
-                        st.markdown("**Error completo:**")
+            if req_info.get('error'):
+                with contenedor_errores:
+                    with st.expander("❌ Error en la busqueda", expanded=True):
+                        st.code(f"GET {req_info['url']}", language="bash")
                         st.code(req_info['error'])
-                    elif req_info.get('response'):
-                        st.markdown("**Response preview:**")
-                        if isinstance(req_info['response'], (list, dict)):
-                            preview = req_info['response'][:3] if isinstance(req_info['response'], list) else req_info['response']
-                            st.json(preview)
-                        else:
-                            st.code(str(req_info['response']))
 
             # Filtrar por reference o ID
             visitas_encontradas = filtrar_visitas(todas_visitas, valores, tipo_busqueda)
@@ -225,8 +210,6 @@ def pagina_mover_visitas_likewise():
                 str(vis.get("reference" if tipo_busqueda == "Reference" else "id", "")).strip()
                 for vis in visitas_encontradas
             ]]
-
-            st.info(f"✅ **Resultados:** {len(visitas_encontradas)} encontradas, {len(no_encontradas)} no encontradas")
 
             update_progress(barra, contador, 1, 1)
 
