@@ -5,7 +5,7 @@ API_ROUTES_REPORTS = "https://api-gateway.simpliroute.com/v1/reports/routes"
 API_SEND_WEBHOOKS = "https://api.simpliroute.com/v1/mobile/send-webhooks"
 
 # Timeouts and delays (seconds)
-REQUEST_TIMEOUT = 15
+REQUEST_TIMEOUT = 60
 CLEANUP_TIMEOUT = 600
 WEBHOOK_DELAY = 0.4
 EDIT_DELAY = 0.5
