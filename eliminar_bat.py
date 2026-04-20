@@ -1,7 +1,5 @@
 import streamlit as st
 import requests
-from datetime import date, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import API_BASE, REQUEST_TIMEOUT
 from utils import (
     render_header, render_guide, render_label, render_stat,
@@ -10,7 +8,6 @@ from utils import (
 )
 
 BAT_TOKEN = "c2e6aa9459c12fcd597f5fb27e274411121f8244"
-FALLBACK_DAYS = 30
 
 
 def _headers():
@@ -42,43 +39,6 @@ def buscar_por_reference(reference):
     except requests.exceptions.RequestException as e:
         info["response"] = str(e)
     return None, info
-
-
-def _buscar_en_fecha(fecha_str, reference):
-    url = f"{API_BASE}/routes/visits/?planned_date={fecha_str}"
-    try:
-        r = requests.get(url, headers=_headers(), timeout=REQUEST_TIMEOUT)
-        if r.status_code == 200:
-            for v in (r.json() or []):
-                if str(v.get("reference", "")) == str(reference):
-                    return v, fecha_str
-    except requests.exceptions.RequestException:
-        pass
-    return None, fecha_str
-
-
-def buscar_por_fechas(reference):
-    """Returns (visita | None, fallback_info dict)."""
-    hoy = date.today()
-    fechas = [
-        (hoy + timedelta(days=d)).strftime("%Y-%m-%d")
-        for d in range(-FALLBACK_DAYS, FALLBACK_DAYS + 1)
-    ]
-    info = {"total_fechas": len(fechas), "fecha_encontrada": None, "url": None, "response": None}
-
-    executor = ThreadPoolExecutor(max_workers=10)
-    futures = {executor.submit(_buscar_en_fecha, f, reference): f for f in fechas}
-    resultado = None
-    for future in as_completed(futures):
-        visita, fecha_str = future.result()
-        if visita:
-            resultado = visita
-            info["fecha_encontrada"] = fecha_str
-            info["url"] = f"{API_BASE}/routes/visits/?planned_date={fecha_str}"
-            info["response"] = visita
-            break
-    executor.shutdown(wait=False)
-    return resultado, info
 
 
 # --- Busqueda por ID ---
@@ -144,7 +104,7 @@ def pagina_eliminar_bat():
 
     render_guide(
         steps=[
-            "<strong>Selecciona el modo</strong> — Por <em>Reference</em>: busqueda directa + fallback \u00b130 dias. Por <em>ID</em>: consulta directa al endpoint de la visita.",
+            "<strong>Selecciona el modo</strong> — Por <em>Reference</em> o por <em>ID</em> de visita.",
             "<strong>Ingresa los valores</strong> — Uno por linea.",
             "<strong>Buscar</strong> — Verifica que las visitas existen antes de procesar.",
             "<strong>Eliminar</strong> — Se envia un PUT por cada visita encontrada vaciando reference, planned_date y route.",
@@ -204,32 +164,18 @@ def pagina_eliminar_bat():
 
             for i, valor in enumerate(valores):
                 if modo == "Reference":
-                    barra.progress((i + 0.3) / total, text=f"Buscando referencia {valor}...")
+                    barra.progress((i + 0.5) / total, text=f"Buscando referencia {valor}...")
                     visita, req_principal = buscar_por_reference(valor)
-
-                    req_fallback = None
-                    if not visita:
-                        barra.progress((i + 0.7) / total, text=f"Fallback fechas {valor}...")
-                        visita, req_fallback = buscar_por_fechas(valor)
-
-                    resultados.append({
-                        "valor": valor,
-                        "modo": "Reference",
-                        "visita": visita,
-                        "req_principal": req_principal,
-                        "req_fallback": req_fallback,
-                    })
                 else:
                     barra.progress((i + 0.5) / total, text=f"Buscando ID {valor}...")
                     visita, req_principal = buscar_por_id(valor)
 
-                    resultados.append({
-                        "valor": valor,
-                        "modo": "ID",
-                        "visita": visita,
-                        "req_principal": req_principal,
-                        "req_fallback": None,
-                    })
+                resultados.append({
+                    "valor": valor,
+                    "modo": modo,
+                    "visita": visita,
+                    "req_principal": req_principal,
+                })
 
                 barra.progress((i + 1) / total, text=f"{i+1}/{total} procesadas")
 
@@ -258,14 +204,9 @@ def pagina_eliminar_bat():
             unsafe_allow_html=True,
         )
 
-    for r in resultados:
-        if r["visita"]:
-            icon, titulo_estado = "\u2713", "encontrada"
-        else:
-            icon, titulo_estado = "\u2717", "no encontrada"
-
+    for r in encontradas:
         prefijo = "Ref" if r["modo"] == "Reference" else "ID"
-        with st.expander(f"{icon} {prefijo} {r['valor']} — {titulo_estado}", expanded=not r["visita"]):
+        with st.expander(f"\u2713 {prefijo} {r['valor']} — encontrada", expanded=False):
             req_p = r["req_principal"]
             label_busqueda = "Busqueda por referencia directa:" if r["modo"] == "Reference" else "Consulta por ID:"
             st.markdown(f"**{label_busqueda}**")
@@ -273,15 +214,10 @@ def pagina_eliminar_bat():
             st.markdown(f"Status: `{req_p['status']}`")
             st.json(req_p["response"])
 
-            req_fb = r.get("req_fallback")
-            if req_fb is not None:
-                st.markdown(f"**Fallback — escaneadas {req_fb['total_fechas']} fechas (\u00b1{FALLBACK_DAYS} dias):**")
-                if req_fb["url"]:
-                    st.markdown(f"Encontrada el `{req_fb['fecha_encontrada']}`")
-                    st.code(f"GET {req_fb['url']}", language="bash")
-                    st.json(req_fb["response"])
-                else:
-                    st.markdown("No encontrada en ninguna fecha del rango.")
+    if no_encontradas:
+        prefijo = "Ref" if no_encontradas[0]["modo"] == "Reference" else "ID"
+        st.markdown(f"**{prefijo} no encontrados ({len(no_encontradas)}):**")
+        st.code("\n".join(r["valor"] for r in no_encontradas), language="text")
 
     if not encontradas:
         st.stop()
