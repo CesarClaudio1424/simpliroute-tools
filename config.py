@@ -4,6 +4,7 @@ API_VISITS_REPORTS = "https://api.simpliroute.com/v1/reports/visits"
 API_ROUTES_REPORTS = "https://api-gateway.simpliroute.com/v1/reports/routes"
 API_SEND_WEBHOOKS = "https://api.simpliroute.com/v1/mobile/send-webhooks"
 API_SEND_PLAN_WEBHOOKS = "https://api.simpliroute.com/v1/mobile/send-plan-webhooks"
+API_SEND_ROUTE_WEBHOOKS = "https://api.simpliroute.com/v1/mobile/send-route-webhooks"
 
 # Timeouts and delays (seconds)
 REQUEST_TIMEOUT = 60
