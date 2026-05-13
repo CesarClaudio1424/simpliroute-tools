@@ -14,7 +14,7 @@ from config import (
 )
 from utils import (
     render_header, render_guide, render_stat, render_label,
-    render_tip, render_error_item, load_secret,
+    render_tip, render_error_item, render_cuenta_badge, load_secret,
     create_progress_tracker, update_progress, finish_progress,
 )
 
@@ -27,6 +27,16 @@ UUID_RE = re.compile(
 
 def _headers(token):
     return {"Authorization": f"Token {token}", "Content-Type": "application/json"}
+
+
+def _validar_cuenta(token):
+    try:
+        r = requests.get(f"{API_BASE}/accounts/me/", headers=_headers(token), timeout=REQUEST_TIMEOUT)
+        if r.status_code == 200:
+            return True, r.json().get("account", {}).get("name", "Sin nombre")
+    except requests.exceptions.RequestException:
+        pass
+    return False, None
 
 
 def _enviar_webhook(token, endpoint, id_key, id_value, action):
@@ -103,6 +113,8 @@ def _procesar_envio(token, ids, endpoint, id_key, action, label_singular):
     barra, contador, contenedor_errores = create_progress_tracker(total, "Enviando webhooks...")
 
     for i, _id in enumerate(ids):
+        if i > 0:
+            time.sleep(1)
         ok, detalle = _enviar_webhook(token, endpoint, id_key, _id, action)
         procesados = i + 1
         if ok:
@@ -122,7 +134,7 @@ def _procesar_envio(token, ids, endpoint, id_key, action, label_singular):
 
 # ── Tab Planes ────────────────────────────────────────────────────────────────
 
-def _seccion_planes(token):
+def _seccion_planes(token_post):
     render_label("Evento: Creacion (plan_created)")
     action = "plan_created"
 
@@ -156,6 +168,25 @@ def _seccion_planes(token):
             return
         ids_finales = validos
     else:
+        render_label("Token de la cuenta (solo para la busqueda)")
+        token_get = st.text_input(
+            "Token GET planes",
+            type="password",
+            label_visibility="collapsed",
+            placeholder="Token de API de la cuenta donde estan los planes",
+            key="rwp_token_get",
+        )
+        if not token_get or not token_get.strip():
+            render_tip("Ingresa el token de la cuenta para listar sus planes. El envio del webhook seguira usando <code>checkout_token</code>.")
+            return
+        token_get = token_get.strip()
+
+        valido, cuenta = _validar_cuenta(token_get)
+        if not valido:
+            st.error("Token invalido. Revisa el token de la cuenta.")
+            return
+        render_cuenta_badge(f"✓ Listando planes de: <strong>{cuenta}</strong>")
+
         col1, col2 = st.columns(2)
         with col1:
             inicio = st.date_input("Desde", value=date.today(), format="DD/MM/YYYY", key="rwp_desde")
@@ -170,7 +201,7 @@ def _seccion_planes(token):
             st.session_state.pop("rwp_editor", None)
             with st.spinner("Consultando planes..."):
                 planes, status, err = _listar_planes(
-                    token, inicio.strftime("%Y-%m-%d"), fin.strftime("%Y-%m-%d")
+                    token_get, inicio.strftime("%Y-%m-%d"), fin.strftime("%Y-%m-%d")
                 )
             if status != 200:
                 render_error_item(f"HTTP {status} al consultar planes: {err or ''}")
@@ -220,12 +251,12 @@ def _seccion_planes(token):
     if not st.button("Enviar webhooks plan_created", type="primary", key="rwp_enviar"):
         return
 
-    _procesar_envio(token, ids_finales, API_SEND_PLAN_WEBHOOKS, "plan_id", action, "Plan")
+    _procesar_envio(token_post, ids_finales, API_SEND_PLAN_WEBHOOKS, "plan_id", action, "Plan")
 
 
 # ── Tab Rutas ─────────────────────────────────────────────────────────────────
 
-def _seccion_rutas(token):
+def _seccion_rutas(token_post):
     render_label("Evento: Creacion (route_created)")
     action = "route_created"
 
@@ -259,6 +290,25 @@ def _seccion_rutas(token):
             return
         ids_finales = validos
     else:
+        render_label("Token de la cuenta (solo para la busqueda)")
+        token_get = st.text_input(
+            "Token GET rutas",
+            type="password",
+            label_visibility="collapsed",
+            placeholder="Token de API de la cuenta donde estan las rutas",
+            key="rwr_token_get",
+        )
+        if not token_get or not token_get.strip():
+            render_tip("Ingresa el token de la cuenta para listar sus rutas. El envio del webhook seguira usando <code>checkout_token</code>.")
+            return
+        token_get = token_get.strip()
+
+        valido, cuenta = _validar_cuenta(token_get)
+        if not valido:
+            st.error("Token invalido. Revisa el token de la cuenta.")
+            return
+        render_cuenta_badge(f"✓ Listando rutas de: <strong>{cuenta}</strong>")
+
         fecha_origen = st.date_input(
             "Fecha de las rutas",
             value=date.today(),
@@ -270,7 +320,7 @@ def _seccion_rutas(token):
             st.session_state.pop("rwr_rutas", None)
             st.session_state.pop("rwr_editor", None)
             with st.spinner("Consultando rutas..."):
-                rutas, status, err = _listar_rutas(token, fecha_origen.strftime("%Y-%m-%d"))
+                rutas, status, err = _listar_rutas(token_get, fecha_origen.strftime("%Y-%m-%d"))
             if status != 200:
                 render_error_item(f"HTTP {status} al consultar rutas: {err or ''}")
                 return
@@ -317,7 +367,7 @@ def _seccion_rutas(token):
     if not st.button("Enviar webhooks route_created", type="primary", key="rwr_enviar"):
         return
 
-    _procesar_envio(token, ids_finales, API_SEND_ROUTE_WEBHOOKS, "route_id", action, "Ruta")
+    _procesar_envio(token_post, ids_finales, API_SEND_ROUTE_WEBHOOKS, "route_id", action, "Ruta")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -331,19 +381,19 @@ def pagina_reenvio_webhooks():
     render_guide(
         steps=[
             '<strong>Elige el objeto</strong> — Planes o Rutas (tabs).',
-            '<strong>Selecciona el origen</strong> — Pega UUIDs uno por linea o cargalos por fecha y selecciona en la tabla.',
+            '<strong>Selecciona el origen</strong> — Pega UUIDs uno por linea o cargalos por fecha (requiere token manual de la cuenta).',
             '<strong>Envia</strong> — Un POST por cada ID con la action <code>plan_created</code> / <code>route_created</code>.',
         ],
-        tip='El token se toma de <code>checkout_token</code> en secrets y se usa tanto para listar (GET) como para enviar (POST).',
+        tip='El envio del webhook siempre usa <code>checkout_token</code> de secrets. El listado por fecha usa un token manual de la cuenta donde estan los planes/rutas.',
     )
 
-    token = load_secret(
+    token_post = load_secret(
         "checkout_token",
         "No se encontro `checkout_token` en `.streamlit/secrets.toml`. Configura `[api_config]` con `checkout_token`.",
     )
 
     tab_planes, tab_rutas = st.tabs(["Planes", "Rutas"])
     with tab_planes:
-        _seccion_planes(token)
+        _seccion_planes(token_post)
     with tab_rutas:
-        _seccion_rutas(token)
+        _seccion_rutas(token_post)
