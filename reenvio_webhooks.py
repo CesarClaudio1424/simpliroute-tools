@@ -199,6 +199,7 @@ def _seccion_planes(token_post):
         if st.button("Buscar planes", key="rwp_buscar"):
             st.session_state.pop("rwp_planes", None)
             st.session_state.pop("rwp_editor", None)
+            st.session_state.pop("rwp_sel", None)
             with st.spinner("Consultando planes..."):
                 planes, status, err = _listar_planes(
                     token_get, inicio.strftime("%Y-%m-%d"), fin.strftime("%Y-%m-%d")
@@ -217,9 +218,26 @@ def _seccion_planes(token_post):
             render_tip("No se encontraron planes en el rango.")
             return
 
+        if "rwp_sel" not in st.session_state:
+            st.session_state.rwp_sel = {p["id"]: False for p in planes}
+
+        editor_state = st.session_state.get("rwp_editor", {})
+        for row_idx_str, changes in editor_state.get("edited_rows", {}).items():
+            if "☑" in changes:
+                pid = planes[int(row_idx_str)]["id"]
+                st.session_state.rwp_sel[pid] = changes["☑"]
+
+        all_selected = all(st.session_state.rwp_sel.get(p["id"], False) for p in planes)
+        btn_label = "Deseleccionar todas" if all_selected else "Seleccionar todas"
+        if st.button(btn_label, key="rwp_toggle_all"):
+            new_val = not all_selected
+            st.session_state.rwp_sel = {p["id"]: new_val for p in planes}
+            st.session_state.pop("rwp_editor", None)
+            st.rerun()
+
         df = pd.DataFrame([
             {
-                "☑": False,
+                "☑": st.session_state.rwp_sel.get(p["id"], False),
                 "Nombre": p.get("name", "(sin nombre)"),
                 "Fechas": f"{p.get('start_date','?')} → {p.get('end_date','?')}",
                 "Rutas": len(p.get("routes", [])),
@@ -319,6 +337,7 @@ def _seccion_rutas(token_post):
         if st.button("Buscar rutas", key="rwr_buscar"):
             st.session_state.pop("rwr_rutas", None)
             st.session_state.pop("rwr_editor", None)
+            st.session_state.pop("rwr_sel", None)
             with st.spinner("Consultando rutas..."):
                 rutas, status, err = _listar_rutas(token_get, fecha_origen.strftime("%Y-%m-%d"))
             if status != 200:
@@ -335,9 +354,26 @@ def _seccion_rutas(token_post):
             render_tip("No se encontraron rutas para esa fecha.")
             return
 
+        if "rwr_sel" not in st.session_state:
+            st.session_state.rwr_sel = {r["id"]: False for r in rutas}
+
+        editor_state = st.session_state.get("rwr_editor", {})
+        for row_idx_str, changes in editor_state.get("edited_rows", {}).items():
+            if "☑" in changes:
+                rid = rutas[int(row_idx_str)]["id"]
+                st.session_state.rwr_sel[rid] = changes["☑"]
+
+        all_selected = all(st.session_state.rwr_sel.get(r["id"], False) for r in rutas)
+        btn_label = "Deseleccionar todas" if all_selected else "Seleccionar todas"
+        if st.button(btn_label, key="rwr_toggle_all"):
+            new_val = not all_selected
+            st.session_state.rwr_sel = {r["id"]: new_val for r in rutas}
+            st.session_state.pop("rwr_editor", None)
+            st.rerun()
+
         df = pd.DataFrame([
             {
-                "☑": False,
+                "☑": st.session_state.rwr_sel.get(r["id"], False),
                 "Fecha": r.get("planned_date", "?"),
                 "Visitas": r.get("total_visits", 0),
                 "Route ID": r.get("id", ""),
