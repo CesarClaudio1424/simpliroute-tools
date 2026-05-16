@@ -370,26 +370,28 @@ def pagina_recuperar_lvp():
                 if event.selection.rows:
                     selecciones[idx] = candidatas[event.selection.rows[0]]
 
-                with st.expander("Ver detalles de todas las candidatas"):
-                    df_detail = pd.DataFrame([
-                        {
-                            "ID": v.get("id"),
-                            "Reference": str(v.get("reference", "")),
-                            "Titulo": v.get("title", ""),
-                            "Fecha": v.get("planned_date", ""),
-                            "Status": v.get("status", ""),
-                            "SKU": v.get("sku", ""),
-                        }
-                        for v in candidatas
-                    ])
-                    st.dataframe(df_detail, use_container_width=True, hide_index=True)
+                if st.checkbox("Ver detalles de todas las candidatas", key=f"disamb_detail_{idx}"):
+                    with st.container(border=True):
+                        df_detail = pd.DataFrame([
+                            {
+                                "ID": v.get("id"),
+                                "Reference": str(v.get("reference", "")),
+                                "Titulo": v.get("title", ""),
+                                "Fecha": v.get("planned_date", ""),
+                                "Status": v.get("status", ""),
+                                "SKU": v.get("sku", ""),
+                            }
+                            for v in candidatas
+                        ])
+                        st.dataframe(df_detail, use_container_width=True, hide_index=True)
 
                 # --- Busqueda por reference ---
                 req_ref = r["req_ref"]
-                with st.expander("Ver detalles del request API"):
-                    st.code(f"GET {req_ref['url']}", language="bash")
-                    st.markdown(f"Status: `{req_ref['status']}`")
-                    st.json(req_ref["response"])
+                if st.checkbox("Ver detalles del request API", key=f"disamb_req_{idx}"):
+                    with st.container(border=True):
+                        st.code(f"GET {req_ref['url']}", language="bash")
+                        st.markdown(f"Status: `{req_ref['status']}`")
+                        st.json(req_ref["response"])
 
         else:
             if visita_actual and r["route_id"]:
