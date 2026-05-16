@@ -359,6 +359,9 @@ def pagina_recuperar_lvp():
                     {
                         "ID": v.get("id"),
                         "Reference": str(v.get("reference", "")),
+                        "SKU": ", ".join(
+                            str(i.get("reference", "")) for i in (v.get("items") or []) if i.get("reference")
+                        ),
                         "Fecha": v.get("planned_date", ""),
                     }
                     for v in candidatas
@@ -383,7 +386,9 @@ def pagina_recuperar_lvp():
                                 "Titulo": v.get("title", ""),
                                 "Fecha": v.get("planned_date", ""),
                                 "Status": v.get("status", ""),
-                                "SKU": v.get("sku", ""),
+                                "SKU": ", ".join(
+                                    str(i.get("reference", "")) for i in (v.get("items") or []) if i.get("reference")
+                                ),
                             }
                             for v in candidatas
                         ])
