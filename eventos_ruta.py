@@ -134,12 +134,12 @@ def _tab_manual():
 
     if not token:
         render_tip("Ingresa el token de la cuenta para continuar.")
-        st.stop()
+        return
 
     ok_cuenta, nombre_cuenta = _validar_cuenta(token)
     if not ok_cuenta:
         st.error("Token invalido o sin acceso a la cuenta.")
-        st.stop()
+        return
     render_cuenta_badge(f"Cuenta: {nombre_cuenta}")
 
     # --- Paso 3: UUIDs ---
@@ -154,7 +154,7 @@ def _tab_manual():
 
     if not uuids_input or not uuids_input.strip():
         render_tip(f"Pega los UUIDs de las rutas a {cfg['verbo']}.")
-        st.stop()
+        return
 
     uuids = []
     vistos = set()
@@ -176,7 +176,7 @@ def _tab_manual():
         st.markdown(render_stat(duplicados, "duplicados ignorados"), unsafe_allow_html=True)
 
     if not st.button(f"{accion} {len(uuids)} ruta(s)", type="primary", key="btn_ev"):
-        st.stop()
+        return
 
     # --- Procesamiento paralelo ---
     total = len(uuids)
@@ -246,17 +246,17 @@ def _tab_cierre_lvp():
 
     if not archivo:
         render_tip(f"Sube el archivo con las rutas a {cfg['verbo']}.")
-        st.stop()
+        return
 
     try:
         df = pd.read_excel(archivo, dtype=str)
     except Exception as e:
         st.error(f"No se pudo leer el archivo: {e}")
-        st.stop()
+        return
 
     if df.shape[1] < 2:
         st.error("El archivo debe tener al menos dos columnas: ID de ruta y Nombre de la cuenta.")
-        st.stop()
+        return
 
     df = df.iloc[:, :2]
     df.columns = ["route_id", "cuenta_nombre"]
@@ -301,10 +301,10 @@ def _tab_cierre_lvp():
             render_tip("Estas rutas se omitiran. Verifica el nombre de la cuenta en cuentas.csv.", warning=True)
 
     if not matched:
-        st.stop()
+        return
 
     if not st.button(f"{accion} {len(matched)} ruta(s)", type="primary", key="btn_ev_lvp"):
-        st.stop()
+        return
 
     total = len(matched)
     exitosos = 0
