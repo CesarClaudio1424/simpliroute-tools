@@ -16,19 +16,19 @@ def pagina_webhooks():
 
     render_guide(
         steps=[
-            '<strong>Selecciona la cuenta</strong> — Elige la empresa del middleware Likewise a la que quieres enviar los webhooks.',
+            '<strong>Selecciona la cuenta</strong> — Elige la empresa Likewise a la que quieres enviar los webhooks.',
             '<strong>Elige las acciones</strong> — Puedes ejecutar Creacion, Inicio de ruta, Checkout, o Exclusion de visitas. No puedes mezclar Exclusiones con las demas.',
-            '<strong>Ingresa los datos</strong> — Numeros de ruta o IDs de visita (para exclusiones), uno por linea.',
+            '<strong>Ingresa los datos</strong> — Creacion/Inicio/Checkout: <code>route_id</code> (UUID) de SimpliRoute. Exclusiones: IDs de visita. Uno por linea.',
             '<strong>Procesa</strong> — Las rutas se envian una a una. Las exclusiones se envian todas en un solo request.',
         ],
-        tip='Las exclusiones trabajan con IDs de visita (numeros enteros), mientras que las demas acciones trabajan con numeros de ruta.',
+        tip='Creacion, Inicio y Checkout reenvian el webhook nativo de SimpliRoute (igual que la pestaña Rutas de Reenvio de Webhooks / Checkout General). Exclusiones sigue yendo directo al middleware Likewise.',
     )
 
     # --- Paso 1: Cuenta ---
     render_label("Paso 1 · Cuenta")
     cuenta = st.radio(
         "Cuenta",
-        list(webhook.ENDPOINTS.keys()),
+        list(webhook.ACCOUNT_TOKENS.keys()),
         horizontal=True,
         label_visibility="collapsed",
     )
@@ -62,7 +62,7 @@ def pagina_webhooks():
     # --- Paso 3: Datos ---
     render_label("Paso 3 · Rutas o visitas")
 
-    placeholder = "Ingresa los IDs de visita (uno por linea)" if exclusion else "Ingresa los numeros de ruta (uno por linea)"
+    placeholder = "Ingresa los IDs de visita (uno por linea)" if exclusion else "Ingresa los route_id (UUID) de las rutas, uno por linea"
     rutas_input = st.text_area(
         "Datos",
         placeholder=placeholder,
@@ -71,7 +71,7 @@ def pagina_webhooks():
     )
 
     if not rutas_input or not rutas_input.strip():
-        render_tip(f'Ingresa {"los IDs de visita" if exclusion else "los numeros de ruta"} a procesar, uno por linea.')
+        render_tip(f'Ingresa {"los IDs de visita" if exclusion else "los route_id (UUID)"} a procesar, uno por linea.')
         st.stop()
 
     items = [line.strip() for line in rutas_input.strip().split("\n") if line.strip()]
@@ -132,11 +132,10 @@ def pagina_webhooks():
         st.stop()
 
     # --- Procesamiento ---
-    urls = webhook.ENDPOINTS[cuenta]
-
     if exclusion:
+        url_exclusion = webhook.EXCLUSION_ENDPOINTS[cuenta]
         barra = st.progress(0, text="Enviando exclusiones...")
-        ok, status, body = webhook.procesar_exclusion(items, urls["exclusion"])
+        ok, status, body = webhook.procesar_exclusion(items, url_exclusion)
         barra.progress(1.0, text="Finalizado")
 
         if ok:
@@ -222,16 +221,21 @@ def pagina_webhooks():
                     st.error(f"{total_l - exitosos_l} visitas no se pudieron limpiar")
             scroll_to_bottom()
     else:
+        token_post = load_secret("checkout_token", "Token `checkout_token` no encontrado en secrets (api_config.checkout_token)")
+        token_key = webhook.ACCOUNT_TOKENS[cuenta]
+        token_get = load_secret(token_key, f"Token de {cuenta} no encontrado en secrets (api_config.{token_key})")
+        account_id = webhook.ACCOUNT_IDS[cuenta]
+
         operaciones = []
         if creacion:
             for item in items:
-                operaciones.append(("Creacion", item, urls["creacion"]))
+                operaciones.append(("Creacion", item))
         if inicio:
             for item in items:
-                operaciones.append(("Inicio", item, urls["inicio"]))
+                operaciones.append(("Inicio", item))
         if checkout:
             for item in items:
-                operaciones.append(("Checkout", item, urls["checkout"]))
+                operaciones.append(("Checkout", item))
 
         total = len(operaciones)
         exitosos = 0
@@ -239,14 +243,18 @@ def pagina_webhooks():
 
         barra, contador, contenedor_errores = create_progress_tracker(total, "Procesando webhooks...")
 
-        for i, (accion, item, url) in enumerate(operaciones):
-            ok, status, body = webhook.procesar_ruta(item, url)
+        for i, (accion, item) in enumerate(operaciones):
+            if accion == "Creacion":
+                ok, detalle = webhook.enviar_route_webhook(token_post, item, "route_created")
+            elif accion == "Inicio":
+                ok, detalle = webhook.enviar_route_webhook(token_post, item, "route_started")
+            else:
+                ok, detalle = webhook.procesar_checkout(token_get, token_post, account_id, item)
             procesados = i + 1
 
             if ok:
                 exitosos += 1
             else:
-                detalle = "respuesta vacia" if status == 200 else f"HTTP {status}"
                 fallidos.append((accion, item, detalle))
                 with contenedor_errores:
                     render_error_item(f"{accion}: ruta {item} — {detalle}")

@@ -1,5 +1,7 @@
+import unicodedata
 import streamlit as st
 import requests
+import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import API_BASE, API_EVENTS_REGISTER, REQUEST_TIMEOUT
 from utils import (
@@ -14,6 +16,24 @@ EVENT_CONFIG = {
     "Iniciar": {"type": "ROUTE_STARTED", "hora": "00:00:00", "verbo": "iniciar"},
     "Finalizar": {"type": "ROUTE_FINISHED", "hora": "23:59:59", "verbo": "finalizar"},
 }
+
+
+def _normalizar_nombre(nombre):
+    nfkd = unicodedata.normalize("NFKD", str(nombre).strip())
+    sin_acentos = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return " ".join(sin_acentos.lower().split())
+
+
+@st.cache_data
+def _cargar_cuentas_lvp():
+    try:
+        df = pd.read_csv("cuentas.csv", encoding="latin-1")
+    except FileNotFoundError:
+        return {}
+    cuentas = {}
+    for nombre, token in zip(df.nombre, df.token):
+        cuentas[_normalizar_nombre(nombre)] = {"nombre": str(nombre), "token": str(token)}
+    return cuentas
 
 
 def _headers(token):
@@ -73,6 +93,14 @@ def _procesar_ruta(token, route_id, event_type, hora):
 def pagina_eventos_ruta():
     render_header("Eventos de Ruta", "Registra eventos ROUTE_STARTED o ROUTE_FINISHED para una lista de rutas")
 
+    tab_manual, tab_lvp = st.tabs(["Manual", "Cierre LVP"])
+    with tab_manual:
+        _tab_manual()
+    with tab_lvp:
+        _tab_cierre_lvp()
+
+
+def _tab_manual():
     render_guide(
         steps=[
             "<strong>Elige la accion</strong> — Iniciar (<code>ROUTE_STARTED</code>) o Finalizar (<code>ROUTE_FINISHED</code>).",
@@ -183,5 +211,133 @@ def pagina_eventos_ruta():
         with st.expander(f"Ver {exitosos} ruta(s) procesada(s)", expanded=False):
             for rid, fecha in detalle_ok:
                 st.markdown(f"- `{rid}` — `{fecha}`")
+    if fallidos:
+        st.error(f"{len(fallidos)} de {total} fallaron")
+
+
+def _tab_cierre_lvp():
+    render_guide(
+        steps=[
+            "<strong>Elige la accion</strong> — Iniciar (<code>ROUTE_STARTED</code>) o Finalizar (<code>ROUTE_FINISHED</code>).",
+            "<strong>Sube el archivo</strong> — Excel con dos columnas: <code>ID de ruta</code> (columna A) y <code>Nombre de la cuenta</code> (columna B), igual al formato de ejemplo.",
+            "<strong>El token de cada cuenta se resuelve automaticamente</strong> desde <code>cuentas.csv</code>, cruzando por nombre (sin distinguir acentos/mayusculas).",
+            "<strong>Procesa</strong> — Por cada ruta se consulta su <code>planned_date</code> y se registra el evento, igual que en el modo Manual.",
+        ],
+        tip="Las cuentas que no se encuentren en <code>cuentas.csv</code> se listan aparte y se omiten del procesamiento.",
+    )
+
+    render_label("Paso 1 · Accion")
+    accion = st.radio(
+        "Accion",
+        list(EVENT_CONFIG.keys()),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="ev_lvp_accion",
+    )
+    cfg = EVENT_CONFIG[accion]
+
+    render_label("Paso 2 · Archivo (ID de ruta / Nombre de la cuenta)")
+    archivo = st.file_uploader(
+        "Archivo",
+        type=["xlsx", "xls"],
+        label_visibility="collapsed",
+        key="ev_lvp_archivo",
+    )
+
+    if not archivo:
+        render_tip(f"Sube el archivo con las rutas a {cfg['verbo']}.")
+        st.stop()
+
+    try:
+        df = pd.read_excel(archivo, dtype=str)
+    except Exception as e:
+        st.error(f"No se pudo leer el archivo: {e}")
+        st.stop()
+
+    if df.shape[1] < 2:
+        st.error("El archivo debe tener al menos dos columnas: ID de ruta y Nombre de la cuenta.")
+        st.stop()
+
+    df = df.iloc[:, :2]
+    df.columns = ["route_id", "cuenta_nombre"]
+    df = df.dropna(subset=["route_id", "cuenta_nombre"])
+    df["route_id"] = df["route_id"].astype(str).str.strip()
+    df["cuenta_nombre"] = df["cuenta_nombre"].astype(str).str.strip()
+    df = df[(df["route_id"] != "") & (df["cuenta_nombre"] != "")]
+
+    vistos = set()
+    duplicados = 0
+    filas = []
+    for route_id, cuenta_nombre in zip(df["route_id"], df["cuenta_nombre"]):
+        if route_id in vistos:
+            duplicados += 1
+            continue
+        vistos.add(route_id)
+        filas.append((route_id, cuenta_nombre))
+
+    cuentas = _cargar_cuentas_lvp()
+    matched = []
+    sin_cuenta = []
+    for route_id, cuenta_nombre in filas:
+        info = cuentas.get(_normalizar_nombre(cuenta_nombre))
+        if info:
+            matched.append((route_id, info["token"], cuenta_nombre))
+        else:
+            sin_cuenta.append((route_id, cuenta_nombre))
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(render_stat(len(filas), "rutas leidas"), unsafe_allow_html=True)
+    with col2:
+        st.markdown(render_stat(len(matched), "listas para procesar"), unsafe_allow_html=True)
+    with col3:
+        st.markdown(render_stat(duplicados, "duplicados ignorados"), unsafe_allow_html=True)
+
+    if sin_cuenta:
+        cuentas_no_encontradas = sorted({c for _, c in sin_cuenta})
+        with st.expander(f"⚠️ {len(sin_cuenta)} ruta(s) con cuenta no encontrada ({len(cuentas_no_encontradas)} cuenta(s))", expanded=True):
+            for nombre in cuentas_no_encontradas:
+                st.markdown(f"- {nombre}")
+            render_tip("Estas rutas se omitiran. Verifica el nombre de la cuenta en cuentas.csv.", warning=True)
+
+    if not matched:
+        st.stop()
+
+    if not st.button(f"{accion} {len(matched)} ruta(s)", type="primary", key="btn_ev_lvp"):
+        st.stop()
+
+    total = len(matched)
+    exitosos = 0
+    fallidos = []
+    detalle_ok = []
+
+    barra, contador, contenedor_errores = create_progress_tracker(total, "Procesando rutas...")
+
+    procesados = 0
+    with ThreadPoolExecutor(max_workers=ROUTE_WORKERS) as executor:
+        futures = {
+            executor.submit(_procesar_ruta, token, route_id, cfg["type"], cfg["hora"]): (route_id, cuenta_nombre)
+            for route_id, token, cuenta_nombre in matched
+        }
+        for future in as_completed(futures):
+            route_id, ok, fecha, err = future.result()
+            _, cuenta_nombre = futures[future]
+            procesados += 1
+            if ok:
+                exitosos += 1
+                detalle_ok.append((route_id, cuenta_nombre, fecha))
+            else:
+                fallidos.append((route_id, cuenta_nombre, err))
+                with contenedor_errores:
+                    render_error_item(f"{route_id} ({cuenta_nombre}) — {err}")
+            update_progress(barra, contador, procesados, total, "Procesando rutas...")
+
+    finish_progress(barra)
+
+    if exitosos > 0:
+        st.success(f"{exitosos} de {total} rutas procesadas correctamente ({cfg['type']})")
+        with st.expander(f"Ver {exitosos} ruta(s) procesada(s)", expanded=False):
+            for rid, cuenta_nombre, fecha in detalle_ok:
+                st.markdown(f"- `{rid}` — {cuenta_nombre} — `{fecha}`")
     if fallidos:
         st.error(f"{len(fallidos)} de {total} fallaron")

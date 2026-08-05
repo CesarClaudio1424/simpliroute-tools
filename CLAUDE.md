@@ -3,7 +3,7 @@
 ## Descripcion
 App Streamlit multi-herramienta con navegacion por sidebar. Incluye catorce herramientas:
 1. **Edicion Masiva de Visitas** — Sube un CSV y edita visitas en bloque via API SimpliRoute (PUT).
-2. **Webhooks Likewise** — Envia webhooks a Google Cloud Functions para procesar rutas/visitas del middleware Likewise (POST).
+2. **Webhooks Likewise** — Creacion/Inicio/Checkout reenvian el webhook nativo de SimpliRoute (`send-route-webhooks`/`send-webhooks`); Exclusiones sigue yendo al middleware Likewise (POST).
 3. **Mover Visitas Likewise** — Busca visitas por rango de fechas, filtra por reference o ID, y las mueve a una fecha destino en las 4 cuentas Likewise (GET + PUT).
 4. **Bloqueo LVP** — Configura bloqueo de edicion y modo seguridad en cuentas Liverpool via API SimpliRoute (POST).
 5. **Reporte Visitas/Rutas** — Genera reportes por rango de fechas dividido en sub-intervalos y los envia por correo via API SimpliRoute (GET).
@@ -84,11 +84,13 @@ runtime.txt                          # Pin Python 3.12 para Streamlit Cloud
 ## Flujo: Webhooks Likewise
 1. Usuario selecciona cuenta (Telefonica, Entel, Omnicanalidad, Biobio)
 2. Elige acciones (Creacion, Inicio, Checkout o Exclusiones)
-3. Ingresa numeros de ruta o IDs de visita (uno por linea)
-4. Al procesar: rutas se envian una a una; exclusiones en un solo request con array de IDs
-5. Valida status 200 + body no vacio (body vacio = error)
-6. Solo muestra errores en la lista; contador de procesados junto a la barra de progreso
-7. (Opcional) Al excluir, puede tambien limpiar las visitas de SimpliRoute:
+3. Ingresa `route_id` (UUID de SimpliRoute) para Creacion/Inicio/Checkout, o IDs de visita para Exclusiones (uno por linea)
+4. Al procesar:
+   - **Creacion/Inicio**: igual que Reenvio de Webhooks > pestaña Rutas — `POST /v1/mobile/send-route-webhooks` con `{"route_id", "action": "route_created"|"route_started"}`, auth `checkout_token`
+   - **Checkout**: igual que Checkout General — primero `GET /v1/routes/routes/{route_id}/` (con el token propio de la cuenta) para obtener `planned_date`, luego `POST /v1/mobile/send-webhooks` con `{"account_ids": [id], "planned_date", "route_ids": [route_id]}`, auth `checkout_token`
+   - **Exclusiones**: sigue igual, POST directo al middleware Likewise con array de visit IDs (sin equivalente nativo en SimpliRoute)
+5. Solo muestra errores en la lista; contador de procesados junto a la barra de progreso
+6. (Opcional) Al excluir, puede tambien limpiar las visitas de SimpliRoute:
    - Usuario marca checkbox "Tambien eliminar visitas de SimpliRoute" e ingresa rango de fechas (max 7 dias)
    - Token se carga desde `st.secrets.api_config.token_{cuenta}` (token_telefonica, token_entel, etc.)
    - GET visitas por cada dia del rango, filtra las excluidas sin ruta asignada
@@ -153,12 +155,16 @@ streamlit run main.py
 - `POST /v1/accounts/{ACCOUNT_ID}/configs/` - Configuracion de cuenta
 - Auth: `Authorization: Token {API_TOKEN}`
 
-### Likewise Middleware (Webhooks)
+### SimpliRoute (Webhooks Likewise — Creacion/Inicio/Checkout)
+- `POST /v1/mobile/send-route-webhooks` - Creacion/Inicio: `{"route_id": uuid, "action": "route_created"|"route_started"}`
+- `GET /v1/routes/routes/{route_id}/` - Checkout: obtiene `planned_date` (auth con token propio de la cuenta: token_telefonica, token_entel, etc.)
+- `POST /v1/mobile/send-webhooks` - Checkout: `{"account_ids": [id], "planned_date", "route_ids": [route_id]}`
+- Auth de los POST: `Authorization: Token {checkout_token}` (desde secrets, misma cuenta que Checkout General/Reenvio de Webhooks)
+- `account_id` por empresa (fijo en `webhook.ACCOUNT_IDS`): Telefonica=15289, Entel=28920, Omnicanalidad=32597, Biobio=70696
+
+### Likewise Middleware (Webhooks — solo Exclusion)
 - Base: `https://us-central1-likewizemiddleware-{empresa}.cloudfunctions.net/`
-- `POST /likewize/webhook/plan/routes/support` - Creacion de rutas
-- `POST /likewize/startRoutes` - Inicio de rutas
-- `POST /likewize/webhook/routes/checkout` - Checkout de rutas
-- `POST /likewize/webhook/visits/support` - Exclusion de visitas
+- `POST /likewize/webhook/visits/support` - Exclusion de visitas (sin equivalente nativo en SimpliRoute)
 - Sin auth (acceso por URL)
 
 ### SimpliRoute (Limpieza post-exclusion)
