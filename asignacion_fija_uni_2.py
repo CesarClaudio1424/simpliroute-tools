@@ -57,12 +57,15 @@ RUTAS_MONTERREY = [
     "R20340-MX01", "R20342-MX01", "R20343-MX01", "R20345-MX01", "R20348-MX01",
     "R20351-MX01", "R20352-MX01", "R20353-MX01", "R20355-MX01", "R20361-MX01",
     "R20362-MX01", "R20363-MX01", "R20364-MX01", "R20378-MX01", "R20384-MX01",
-    "R21218-MX01",
+    "R21218-MX01", "R20081-MX01", "R1001FO-MX01",
 ]
 ESPECIALES_MONTERREY = [
     "R1001FM-MX01",
     "R1001EV-MX01",
 ]
+# Comodín: puede ser especial (con archivo de excepciones de cliente) o, si ese
+# día no se activa como especial, la 23ª ruta fija (última en elegirse).
+RUTA_COMODIN_MTY = "R1001FN-MX01"
 
 
 def _get_supabase_client():
@@ -122,6 +125,9 @@ def _num_habilidad(hab):
         s = m.group(1)
     s = s.lstrip("F")
     return s or None
+
+
+_NUM_COMODIN_MTY = _num_habilidad(RUTA_COMODIN_MTY)
 
 
 def _ruta_nombre(num):
@@ -390,18 +396,21 @@ def _cliente_de_visita(visita):
 
 
 def _proponer_asignacion(vehiculos_plan, visitas, lookup, flota, plan_id=None,
-                         rutas_plan=None, respetar_capacidad=False):
+                         rutas_plan=None, respetar_capacidad=False, especiales_nums=None):
     """Greedy 1:1: el par (ruta, vehiculo fijo) con mayor % de clientes gana primero.
     Rutas con vehiculo especial o ya fijo quedan bloqueadas y su vehiculo sale del pool.
     Solo considera rutas del plan seleccionado (plan_id/rutas_plan).
     Con respetar_capacidad, una unidad con tope no compite por rutas que exceden su
-    capacidad (carga_3) — se va a su mejor ruta que sí cabe y la excedida queda libre."""
+    capacidad (carga_3) — se va a su mejor ruta que sí cabe y la excedida queda libre.
+    especiales_nums permite variar qué numeros se tratan como especiales (ej. el
+    comodín R1001FN-MX01 solo cuando se activó como especial ese día)."""
+    especiales_nums = _ESPECIALES_NUMS if especiales_nums is None else especiales_nums
     rutas_plan = rutas_plan or set()
     rutas = {}
     usados = set()
     for v in vehiculos_plan:
         num_actual = _extraer_num_vehiculo(str(v.get("name") or ""))
-        if num_actual in _ESPECIALES_NUMS:
+        if num_actual in especiales_nums:
             bloqueo = "especial — no se toca"
         elif num_actual and num_actual in flota:
             bloqueo = "ya tiene vehículo fijo"
@@ -449,7 +458,7 @@ def _proponer_asignacion(vehiculos_plan, visitas, lookup, flota, plan_id=None,
         for c in clientes:
             data = lookup.get(c)
             num = _num_habilidad(data.get("habilidad_1")) if data else None
-            if num and num in flota and num not in _ESPECIALES_NUMS:
+            if num and num in flota and num not in especiales_nums:
                 votos[num] = votos.get(num, 0) + 1
         for num, n in votos.items():
             # con respetar_capacidad, la unidad con tope no compite por esta ruta
@@ -555,7 +564,9 @@ def _aplicar_asignacion(token, fecha_str, cambios, flota):
         render_tip("Todos los vehículos se asignaron correctamente. Vuelve a leer el plan para verificar.")
 
 
-def _actualizar_habilidades_desde_plan(token, fecha_str, agencia, plan_id=None, rutas_plan=None):
+def _actualizar_habilidades_desde_plan(token, fecha_str, agencia, plan_id=None, rutas_plan=None,
+                                        especiales_nums=None):
+    especiales_nums = _ESPECIALES_NUMS if especiales_nums is None else especiales_nums
     rutas_plan = rutas_plan or set()
     loader = st.empty()
     _render_loader(loader, "Leyendo plan...", fecha_str)
@@ -584,7 +595,7 @@ def _actualizar_habilidades_desde_plan(token, fecha_str, agencia, plan_id=None, 
     conteos = {}
     for vis in visitas:
         num = num_por_ruta.get(vis.get("route"))
-        if not num or num in _ESPECIALES_NUMS:
+        if not num or num in especiales_nums:
             continue
         cliente = _cliente_de_visita(vis)
         if not cliente:
@@ -651,6 +662,33 @@ def _limpiar_codigo_cliente(valor):
     s = s.split("-")[0]
     s = s.lstrip("0")
     return s
+
+
+# Archivo de excepciones para el comodín R1001FN-MX01 (planning_exclusions_MONTERREY).
+# Solo se usan las filas marcadas como EXCEPCION DE CLIENTE; esos clientes van
+# únicamente a esta ruta.
+EXCL_COL_CODIGO = "Codigo de cliente"
+EXCL_COL_NOMBRE = "Nombre del cliente"
+EXCL_COL_TIPO = "Tipo de exclusion"
+EXCL_TIPO_VALOR = "EXCEPCION DE CLIENTE"
+
+
+def _leer_excepciones_comodin(archivo):
+    """Lee planning_exclusions_MONTERREY y devuelve {cliente_limpio: nombre}
+    solo para las filas de tipo EXCEPCION DE CLIENTE."""
+    df = pd.read_excel(archivo, dtype=str, header=0).fillna("")
+    if EXCL_COL_TIPO not in df.columns or EXCL_COL_CODIGO not in df.columns:
+        raise ValueError(
+            f"El archivo no tiene las columnas '{EXCL_COL_TIPO}' / '{EXCL_COL_CODIGO}'."
+        )
+    clientes = {}
+    for _, row in df.iterrows():
+        if str(row[EXCL_COL_TIPO]).strip().upper() != EXCL_TIPO_VALOR:
+            continue
+        cliente = _limpiar_codigo_cliente(row[EXCL_COL_CODIGO])
+        if cliente:
+            clientes[cliente] = str(row.get(EXCL_COL_NOMBRE, "")).strip()
+    return clientes
 
 
 def _fmt_hora(val, default):
@@ -780,7 +818,7 @@ def _fetch_planeacion_datos(supabase, clientes):
     return datos
 
 
-def _generar_archivo_especiales(df_bd, nombre_original, especiales_activas):
+def _generar_archivo_especiales(df_bd, nombre_original, especiales_activas, comodin_clientes=None):
     loader = st.empty()
     _render_loader(loader, "Clasificando especiales del día...", f"{len(df_bd):,} filas en hoja BD")
 
@@ -805,6 +843,16 @@ def _generar_archivo_especiales(df_bd, nombre_original, especiales_activas):
         if nombre.upper().startswith("VENTA PROSPECTO"):
             continue
         especiales.setdefault(cliente, {"nombre": nombre, "especial": ruta_unica or ruta_arch})
+
+    # 1b. Comodín (R1001FN-MX01): definido aparte por el archivo de excepciones de
+    # cliente. Únicamente esos clientes van ahí — sobreescribe cualquier
+    # clasificación previa que traigan del Monitoreo.
+    if comodin_clientes:
+        for cliente, nombre in comodin_clientes.items():
+            especiales[cliente] = {
+                "nombre": nombre or especiales.get(cliente, {}).get("nombre", ""),
+                "especial": _NUM_COMODIN_MTY,
+            }
 
     # 2. Universo base: maestro de clientes cruzado con la planeación Monterrey
     #    (todos en disabled); se agregan los especiales del día que falten.
@@ -886,7 +934,7 @@ def _generar_archivo_especiales(df_bd, nombre_original, especiales_activas):
 
 
 def _subseccion_archivo_especiales():
-    with st.expander("Archivo de especiales 1001FM/1001EV (ruta fija) — antes de rutear"):
+    with st.expander("Archivo de especiales (ruta fija) — antes de rutear"):
         render_tip(
             "A Simpli hay que indicarle qué clientes pertenecen a las rutas especiales "
             "<strong>antes</strong> de rutear. Sube el Monitoreo de Pedidos (hoja BD): "
@@ -904,6 +952,40 @@ def _subseccion_archivo_especiales():
             with col_esp:
                 if st.checkbox(esp, value=True, key=f"avp2_esp_{num_esp}"):
                     activas.add(num_esp)
+
+        st.markdown("---")
+        comodin_activo = st.checkbox(
+            f"{RUTA_COMODIN_MTY} — comodín especial (excepciones de cliente)",
+            value=False,
+            key=f"avp2_esp_{_NUM_COMODIN_MTY}",
+        )
+        comodin_clientes = None
+        if comodin_activo:
+            render_tip(
+                "Sube el archivo <strong>planning_exclusions_MONTERREY</strong>. Se toman "
+                "solo las filas con <strong>Tipo de exclusión</strong> = "
+                "<code>EXCEPCION DE CLIENTE</code>; esos clientes van "
+                "<strong>únicamente</strong> a esta ruta. Si no se activa, "
+                f"<code>{RUTA_COMODIN_MTY}</code> queda disponible como fija (última en "
+                "elegirse) en la sección de asignación de vehículos."
+            )
+            archivo_comodin = st.file_uploader(
+                "Archivo de excepciones (planning_exclusions_MONTERREY)",
+                type=["xlsx", "xls"],
+                key="avp2_esp_comodin_archivo",
+            )
+            if archivo_comodin:
+                try:
+                    comodin_clientes = _leer_excepciones_comodin(archivo_comodin)
+                except Exception as e:
+                    st.error(f"Error al leer el archivo de excepciones: {e}")
+                if comodin_clientes is not None and not comodin_clientes:
+                    render_tip("El archivo no tiene filas EXCEPCION DE CLIENTE.", warning=True)
+            else:
+                render_tip(
+                    "Falta subir el archivo de excepciones para activar el comodín.",
+                    warning=True,
+                )
 
         archivo = st.file_uploader(
             "Monitoreo de Pedidos (hoja BD)",
@@ -943,7 +1025,10 @@ def _subseccion_archivo_especiales():
                 if df_bd.shape[1] <= BD_COL_RUTA:
                     st.error("El archivo no tiene columna H (Ruta).")
                 else:
-                    _generar_archivo_especiales(df_bd, archivo.name, activas)
+                    _generar_archivo_especiales(
+                        df_bd, archivo.name, activas,
+                        comodin_clientes if comodin_activo else None,
+                    )
 
         if st.session_state.get("avp2_esp_bytes"):
             stats = st.session_state.get("avp2_esp_stats") or {}
@@ -1266,6 +1351,7 @@ def _seccion_asignar_vehiculos():
     plan_id = plan_sel.get("id")
     rutas_plan = _rutas_de_plan(plan_sel)
 
+    fn_especial_hoy = False
     if cuenta == "Tláhuac":
         render_label("Vehículos activos este día")
         activos_txt = st.text_area(
@@ -1277,16 +1363,26 @@ def _seccion_asignar_vehiculos():
         )
         nums_activos = {n for line in activos_txt.splitlines() if (n := _extraer_num_vehiculo(line))}
     else:
-        render_label(f"Cuántas rutas (max {len(RUTAS_MONTERREY)})")
+        fn_especial_hoy = bool(st.session_state.get(f"avp2_esp_{_NUM_COMODIN_MTY}", False))
+        pool_mty = RUTAS_MONTERREY if fn_especial_hoy else RUTAS_MONTERREY + [RUTA_COMODIN_MTY]
+        render_label(f"Cuántas rutas (max {len(pool_mty)})")
         n_rutas = st.number_input(
             "Rutas",
             min_value=1,
-            max_value=len(RUTAS_MONTERREY),
-            value=min(18, len(RUTAS_MONTERREY)),
+            max_value=len(pool_mty),
+            value=min(18, len(pool_mty)),
             key="avp2_n_rutas",
             label_visibility="collapsed",
         )
-        nums_activos = {n for v in RUTAS_MONTERREY[:int(n_rutas)] if (n := _extraer_num_vehiculo(v))}
+        nums_activos = {n for v in pool_mty[:int(n_rutas)] if (n := _extraer_num_vehiculo(v))}
+        render_tip(
+            f"<strong>{RUTA_COMODIN_MTY}</strong> detectado como especial hoy (bloqueada, "
+            "fuera del pool de fijas)." if fn_especial_hoy else
+            f"<strong>{RUTA_COMODIN_MTY}</strong> disponible como fija "
+            f"(posición {len(pool_mty)}, última en elegirse)."
+        )
+
+    especiales_nums_hoy = _ESPECIALES_NUMS | ({_NUM_COMODIN_MTY} if fn_especial_hoy else set())
 
     if nums_activos:
         render_tip(
@@ -1297,7 +1393,7 @@ def _seccion_asignar_vehiculos():
     if st.button("Leer plan y proponer asignación", use_container_width=True, key="avp2_btn_leer"):
         for k in ("avp2_raw_veh", "avp2_raw_vis", "avp2_raw_lookup", "avp2_flota",
                   "avp2_conductores", "avp2_fecha_leida", "avp2_plan_leido",
-                  "avp2_rutas_plan", "avp2_respetar_cap"):
+                  "avp2_rutas_plan", "avp2_respetar_cap", "avp2_especiales_nums"):
             st.session_state.pop(k, None)
 
         loader = st.empty()
@@ -1355,6 +1451,7 @@ def _seccion_asignar_vehiculos():
         st.session_state["avp2_fecha_leida"] = fecha_str
         st.session_state["avp2_plan_leido"] = plan_id
         st.session_state["avp2_rutas_plan"] = list(rutas_plan)
+        st.session_state["avp2_especiales_nums"] = especiales_nums_hoy
 
     _subseccion_propuesta(token, fecha_str, plan_id)
 
@@ -1367,7 +1464,7 @@ def _seccion_asignar_vehiculos():
         "Especiales y vehículos genéricos se omiten; los clientes nuevos se registran solos."
     )
     if st.button("Actualizar habilidades desde el plan", use_container_width=True, key="avp2_btn_feedback"):
-        _actualizar_habilidades_desde_plan(token, fecha_str, cuenta, plan_id, rutas_plan)
+        _actualizar_habilidades_desde_plan(token, fecha_str, cuenta, plan_id, rutas_plan, especiales_nums_hoy)
 
     st.markdown("---")
     render_label("Descargar plan en formato SimpliRoute")
@@ -1400,11 +1497,12 @@ def _subseccion_propuesta(token, fecha_str, plan_id):
     visitas = st.session_state["avp2_raw_vis"]
     lookup = st.session_state["avp2_raw_lookup"]
     rutas_plan = set(st.session_state.get("avp2_rutas_plan") or [])
+    especiales_nums = set(st.session_state.get("avp2_especiales_nums") or _ESPECIALES_NUMS)
 
     # propuesta base (solo %) — sirve para detectar conflictos de capacidad
     prop_pct, usados_pct = _proponer_asignacion(
         vehiculos_plan, visitas, lookup, flota, plan_id, rutas_plan,
-        respetar_capacidad=False,
+        respetar_capacidad=False, especiales_nums=especiales_nums,
     )
     if not prop_pct:
         st.error("El plan seleccionado no tiene rutas en la respuesta de la API.")
@@ -1429,7 +1527,7 @@ def _subseccion_propuesta(token, fecha_str, plan_id):
     if respetar:
         propuestas, usados = _proponer_asignacion(
             vehiculos_plan, visitas, lookup, flota, plan_id, rutas_plan,
-            respetar_capacidad=True,
+            respetar_capacidad=True, especiales_nums=especiales_nums,
         )
     else:
         propuestas, usados = prop_pct, usados_pct
@@ -1484,7 +1582,7 @@ def _subseccion_propuesta(token, fecha_str, plan_id):
     render_label("Propuesta de asignación")
     st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
 
-    sobrantes = sorted(n for n in flota if n not in usados and n not in _ESPECIALES_NUMS)
+    sobrantes = sorted(n for n in flota if n not in usados and n not in especiales_nums)
 
     # Capacidad excedida y se eligió mantener el %: se ofrece cambio manual.
     overrides = {}
