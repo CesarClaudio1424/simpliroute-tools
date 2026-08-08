@@ -20,6 +20,7 @@ from checkout_bat import pagina_checkout_bat
 from reenvio_webhooks import pagina_reenvio_webhooks
 from eventos_ruta import pagina_eventos_ruta
 from flotas import pagina_flotas
+from detalle_visitas_lvp import pagina_detalle_visitas_lvp
 
 st.set_page_config(
     page_title="SimpliRoute Tools",
@@ -57,7 +58,7 @@ with st.sidebar:
 
     pagina = st.radio(
         "Herramienta",
-        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Unilever", "Zonas KML", "Recuperar Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas"],
+        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Unilever", "Zonas KML", "Recuperar Visitas LVP", "Detalle Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas"],
         label_visibility="collapsed",
     )
 
@@ -94,6 +95,8 @@ elif pagina == "Zonas KML":
     pagina_zonas_kml()
 elif pagina == "Recuperar Visitas LVP":
     pagina_recuperar_lvp()
+elif pagina == "Detalle Visitas LVP":
+    pagina_detalle_visitas_lvp()
 elif pagina == "Eliminar Visitas BAT":
     pagina_eliminar_bat()
 elif pagina == "Eliminar Visitas":
