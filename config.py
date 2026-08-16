@@ -23,3 +23,6 @@ RETRY_BASE_DELAY = 2  # seconds, doubles each attempt (2, 4, 8)
 EDIT_TIMEOUT = 240
 MAX_BLOCK_SIZE = 400
 CLEANUP_NUM_BATCHES = 5
+
+# Validador de Plan
+MAX_SMALLINT_FIELD = 32767  # limite del campo SmallInteger de SimpliRoute para *_percentage; superarlo bloquea el guardado del plan

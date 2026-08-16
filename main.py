@@ -21,6 +21,7 @@ from reenvio_webhooks import pagina_reenvio_webhooks
 from eventos_ruta import pagina_eventos_ruta
 from flotas import pagina_flotas
 from detalle_visitas_lvp import pagina_detalle_visitas_lvp
+from validador_plan import pagina_validador_plan
 
 st.set_page_config(
     page_title="SimpliRoute Tools",
@@ -58,7 +59,7 @@ with st.sidebar:
 
     pagina = st.radio(
         "Herramienta",
-        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Unilever", "Zonas KML", "Recuperar Visitas LVP", "Detalle Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas"],
+        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Unilever", "Zonas KML", "Recuperar Visitas LVP", "Detalle Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas", "Validador de Plan"],
         label_visibility="collapsed",
     )
 
@@ -109,8 +110,10 @@ elif pagina == "Cambio de Fechas":
     pagina_cambiar_fecha_plan()
 elif pagina == "Eventos de Ruta":
     pagina_eventos_ruta()
-else:
+elif pagina == "Flotas":
     pagina_flotas()
+else:
+    pagina_validador_plan()
 
 # --- Autoscroll global ---
 # Corre en iframe (window.parent accesible en Streamlit Cloud mismo origen).
