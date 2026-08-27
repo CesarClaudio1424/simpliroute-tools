@@ -26,3 +26,6 @@ CLEANUP_NUM_BATCHES = 5
 
 # Validador de Plan
 MAX_SMALLINT_FIELD = 32767  # limite del campo SmallInteger de SimpliRoute para *_percentage; superarlo bloquea el guardado del plan
+
+# Motivos de Rechazo
+OBSERVATION_DELAY = 0.3  # seconds between create/delete requests

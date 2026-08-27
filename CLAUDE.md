@@ -53,6 +53,7 @@ reporte_visitas.py                   # Pagina Reporte Visitas/Rutas (UI + API re
 checkout_general.py                  # Pagina Checkout General (UI + API send-webhooks)
 unilever.py                          # Pagina Unilever (UI + API edicion cargas/ventanas por agencia)
 zonas_kml.py                         # Pagina Zonas KML (UI + API creacion/eliminacion de zonas)
+motivos_rechazo.py                   # Pagina Motivos de Rechazo (UI + API creacion/eliminacion de Observations tipo failed)
 recuperar_lvp.py                     # Pagina Recuperar Visitas LVP (UI + busqueda hibrida + asignacion)
 cambiar_fecha_plan.py                # Pagina Cambio de Fechas: 3 tabs (Plan / Rutas / Visitas)
 eventos_ruta.py                      # Pagina Eventos de Ruta (POST ROUTE_STARTED / ROUTE_FINISHED desde lista de UUIDs)
@@ -62,6 +63,7 @@ runtime.txt                          # Pin Python 3.12 para Streamlit Cloud
 .gitignore                           # Exclusiones de git
 .claude/commands/simpliroute-api.md  # Skill con referencia de API SimpliRoute
 .claude/commands/ticket.md           # Skill para generar tickets/reportes de bug con plantilla estandar
+.claude/commands/plan-curl.md        # Skill: revisa curl de create/edit-plan, detecta % de carga fuera de rango, corrige vehiculo y JSON, reenvia
 ```
 
 ## UI
@@ -222,6 +224,14 @@ streamlit run main.py
 - `schedules` siempre se incluye (lista vacia o dias en ingles: Monday, Tuesday, etc.)
 - Delay entre requests: 0.5s (ZONA_DELAY)
 
+### SimpliRoute (Motivos de Rechazo)
+- `GET /v1/routes/observations/` - Listar motivos de la cuenta (response: lista plana `[{id, type, label, created, modified}]`); se filtra localmente por `type == "failed"`
+- `POST /v1/routes/observations/` - Crear motivo. Payload: `{"type": "failed", "label": "..."}`
+- `DELETE /v1/routes/observations/{id}` - Eliminar motivo por ID (sin trailing slash; 204 = exito)
+- Auth: `Authorization: Token {API_TOKEN}` (token ingresado manualmente, no desde secrets)
+- `id` es un UUID (confirmado contra API real)
+- Delay entre requests: 0.3s (OBSERVATION_DELAY)
+
 ## Flujo: Recuperar Visitas LVP
 1. Token se carga automaticamente desde `cuentas.csv` segun la cuenta seleccionada (columna `token`)
 2. Selecciona cuenta Liverpool del dropdown
@@ -257,6 +267,21 @@ streamlit run main.py
    - Procesa una zona por rerun via DELETE; barra de progreso + boton Cancelar aparecen al fondo
    - Errores en expanders con URL del request y body del response
 - El Cancelar funciona entre reruns: detiene el siguiente item, puede eliminar/crear 1 extra despues del clic
+
+## Flujo: Motivos de Rechazo
+1. Usuario ingresa token de API (manual, no desde secrets)
+2. Elige modo via radio selector: **Crear motivos** o **Ver y eliminar motivos existentes**
+3. **Modo Crear:**
+   - Pega un motivo por linea en un textarea
+   - Preview con cantidad y aviso de duplicados
+   - Procesa un motivo por rerun via `POST /v1/routes/observations/` (`type: "failed"`); barra de progreso + boton Cancelar
+4. **Modo Ver y eliminar:**
+   - Boton "Leer motivos de la cuenta" → `GET /v1/routes/observations/`, filtra localmente `type == "failed"`
+   - Multiselect con todos los motivos seleccionados por defecto (formato "label (#id)")
+   - Checkbox de confirmacion antes de eliminar
+   - Procesa un motivo por rerun via `DELETE /v1/routes/observations/{id}`; barra de progreso + boton Cancelar
+- Estos motivos son las Observations que luego se referencian en el checkout fallido de una visita (`checkout_observation`)
+- Mismo patron de queue-por-rerun que Zonas KML (cambiar token/modo limpia el estado en session_state)
 
 ## Flujo: Unilever
 1. Usuario elige tipo de archivo maestro: **Archivo 4** (Ruteo Dinámico) o **Archivo 1** (Monitoreo de Pedidos)

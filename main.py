@@ -22,6 +22,7 @@ from eventos_ruta import pagina_eventos_ruta
 from flotas import pagina_flotas
 from detalle_visitas_lvp import pagina_detalle_visitas_lvp
 from validador_plan import pagina_validador_plan
+from motivos_rechazo import pagina_motivos_rechazo
 
 st.set_page_config(
     page_title="SimpliRoute Tools",
@@ -59,7 +60,7 @@ with st.sidebar:
 
     pagina = st.radio(
         "Herramienta",
-        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Unilever", "Zonas KML", "Recuperar Visitas LVP", "Detalle Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas", "Validador de Plan"],
+        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Unilever", "Zonas KML", "Motivos de Rechazo", "Recuperar Visitas LVP", "Detalle Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas", "Validador de Plan"],
         label_visibility="collapsed",
     )
 
@@ -94,6 +95,8 @@ elif pagina == "Unilever":
     pagina_unilever()
 elif pagina == "Zonas KML":
     pagina_zonas_kml()
+elif pagina == "Motivos de Rechazo":
+    pagina_motivos_rechazo()
 elif pagina == "Recuperar Visitas LVP":
     pagina_recuperar_lvp()
 elif pagina == "Detalle Visitas LVP":
