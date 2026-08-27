@@ -29,3 +29,7 @@ MAX_SMALLINT_FIELD = 32767  # limite del campo SmallInteger de SimpliRoute para 
 
 # Motivos de Rechazo
 OBSERVATION_DELAY = 0.3  # seconds between create/delete requests
+
+# Consulta Extensiones
+EXTENSIONES_QUERY_LIMIT = 500  # cap de filas por consulta (la tabla no filtra por cuenta propia, puede haber decenas de miles)
+EXTENSIONES_MIN_SEARCH_LEN = 3  # minimo de caracteres antes de permitir buscar

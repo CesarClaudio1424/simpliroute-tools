@@ -23,6 +23,7 @@ from flotas import pagina_flotas
 from detalle_visitas_lvp import pagina_detalle_visitas_lvp
 from validador_plan import pagina_validador_plan
 from motivos_rechazo import pagina_motivos_rechazo
+from consulta_extensiones import pagina_consulta_extensiones
 
 st.set_page_config(
     page_title="SimpliRoute Tools",
@@ -60,7 +61,7 @@ with st.sidebar:
 
     pagina = st.radio(
         "Herramienta",
-        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Unilever", "Zonas KML", "Motivos de Rechazo", "Recuperar Visitas LVP", "Detalle Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas", "Validador de Plan"],
+        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Unilever", "Zonas KML", "Motivos de Rechazo", "Recuperar Visitas LVP", "Detalle Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas", "Consulta Extensiones", "Validador de Plan"],
         label_visibility="collapsed",
     )
 
@@ -115,6 +116,8 @@ elif pagina == "Eventos de Ruta":
     pagina_eventos_ruta()
 elif pagina == "Flotas":
     pagina_flotas()
+elif pagina == "Consulta Extensiones":
+    pagina_consulta_extensiones()
 else:
     pagina_validador_plan()
 

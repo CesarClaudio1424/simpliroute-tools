@@ -54,6 +54,7 @@ checkout_general.py                  # Pagina Checkout General (UI + API send-we
 unilever.py                          # Pagina Unilever (UI + API edicion cargas/ventanas por agencia)
 zonas_kml.py                         # Pagina Zonas KML (UI + API creacion/eliminacion de zonas)
 motivos_rechazo.py                   # Pagina Motivos de Rechazo (UI + API creacion/eliminacion de Observations tipo failed)
+consulta_extensiones.py              # Pagina Consulta Extensiones (UI + SQL directo a BD readonly, busca extensiones asignadas por cuenta)
 recuperar_lvp.py                     # Pagina Recuperar Visitas LVP (UI + busqueda hibrida + asignacion)
 cambiar_fecha_plan.py                # Pagina Cambio de Fechas: 3 tabs (Plan / Rutas / Visitas)
 eventos_ruta.py                      # Pagina Eventos de Ruta (POST ROUTE_STARTED / ROUTE_FINISHED desde lista de UUIDs)
@@ -232,6 +233,14 @@ streamlit run main.py
 - `id` es un UUID (confirmado contra API real)
 - Delay entre requests: 0.3s (OBSERVATION_DELAY)
 
+### BD Readonly (Consulta Extensiones)
+- Conexion directa Postgres (no API SimpliRoute) a `readonly-bi.simpliroute.com:5432`, base `icarus`, usuario `retools_reporting`
+- Query: JOIN `extensions_extensions` + `extensions_userextensions` + `accounts_account` + `accounts_user`, filtrado por `accounts_account.name ILIKE %busqueda%`
+- Devuelve: label, account_id, account_name, user_name, user_id, urls — de la extension (app embebida tipo Retool) asignada a cada usuario
+- Cruza **todas** las cuentas de SimpliRoute (no solo una) — no hay equivalente en la API publica (`POST /v1/extensions/add/` es solo escritura y requiere token de staff)
+- Auth: usuario/password desde secrets `[readonly_bi]` (host, port, dbname, user, password)
+- Limite duro de `EXTENSIONES_QUERY_LIMIT` filas por consulta y minimo `EXTENSIONES_MIN_SEARCH_LEN` caracteres antes de permitir buscar (config.py) — evita volcar la tabla completa (decenas de miles de filas sin este filtro)
+
 ## Flujo: Recuperar Visitas LVP
 1. Token se carga automaticamente desde `cuentas.csv` segun la cuenta seleccionada (columna `token`)
 2. Selecciona cuenta Liverpool del dropdown
@@ -282,6 +291,14 @@ streamlit run main.py
    - Procesa un motivo por rerun via `DELETE /v1/routes/observations/{id}`; barra de progreso + boton Cancelar
 - Estos motivos son las Observations que luego se referencian en el checkout fallido de una visita (`checkout_observation`)
 - Mismo patron de queue-por-rerun que Zonas KML (cambiar token/modo limpia el estado en session_state)
+
+## Flujo: Consulta Extensiones
+1. Usuario escribe (parte de) el nombre de una cuenta SimpliRoute
+2. Boton "Buscar" → conexion directa a la BD readonly (`readonly-bi.simpliroute.com`, base `icarus`) via psycopg2, credenciales desde secrets `[readonly_bi]`
+3. Ejecuta JOIN de `extensions_extensions`/`extensions_userextensions`/`accounts_account`/`accounts_user` filtrado por `account_name ILIKE %busqueda%`, limitado a `EXTENSIONES_QUERY_LIMIT` filas
+4. Muestra tabla con account_name, account_id, user_name, user_id, label, urls
+- No usa la API de SimpliRoute — el endpoint publico de Extensions (`POST /v1/extensions/add/`) es solo de escritura y requiere token de staff; no existe GET
+- Consulta cruza todas las cuentas de la plataforma, no solo la del usuario — herramienta de uso interno, no un token-scoped tool como el resto
 
 ## Flujo: Unilever
 1. Usuario elige tipo de archivo maestro: **Archivo 4** (Ruteo Dinámico) o **Archivo 1** (Monitoreo de Pedidos)
