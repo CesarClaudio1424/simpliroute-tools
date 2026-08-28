@@ -8,3 +8,5 @@
 - [Busqueda por reference case-sensitive](reference_simpliroute_reference_case_sensitive.md) — GET .../visits/reference/{ref}/ distingue mayus/minus; reintentar en mayusculas si da "no encontrado"
 - [Conector datamart-mcp](reference_datamart_mcp.md) — MCP de solo lectura a datos operacionales SR; confirmado funcionando (tools disponibles via ToolSearch)
 - [Cuentas Brightcell migradas](project_cuentas_brightcell_migradas.md) — Telefonica/Omnicanalidad/Biobio/Entel: mismas cuentas "Likewise", renombradas a Brightcell en produccion
+- [Memoria y skills versionados](project_memoria_skills_versionados.md) — .claude/commands, skills y memory ahora viajan con git; autoMemoryDirectory sin verificar aun
+- [Tokens acumulados en settings](reference_claude_settings_tokens_acumulados.md) — settings.json/settings.local.json tienen tokens reales en texto plano; nunca ampliar el gitignore sobre ellos
