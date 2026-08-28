@@ -3,4 +3,6 @@ __pycache__/
 *.pyc
 .env
 .streamlit/
-.claude/
+.claude/*
+!.claude/commands/
+!.claude/skills/
