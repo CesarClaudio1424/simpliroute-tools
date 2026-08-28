@@ -6,3 +6,4 @@ __pycache__/
 .claude/*
 !.claude/commands/
 !.claude/skills/
+!.claude/memory/

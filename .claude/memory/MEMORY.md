@@ -1,0 +1,10 @@
+- [Confirmar antes de deploy](feedback_deploy_target.md) — Siempre pedir confirmacion explicita antes de hacer push, aunque se especifique destino
+- [Token de pruebas](user_test_token.md) — Token personal de Cesar para pruebas (cuenta Julio Mares SR Team, account 56065)
+- [SimpliRoute trailing slash](reference_simpliroute_trailing_slash.md) — PUT/PATCH a recursos individuales por ID requieren `/` final o ignoran el body
+- [Likewise: "ID" = reference SR](reference_likewise_id_vs_reference.md) — En cuentas Likewise, el "ID de visita" que maneja el usuario es el campo `reference` en SimpliRoute, no el `id` interno
+- [TLS workaround del entorno](reference_tls_workaround_entorno.md) — Supabase/Postgres via truststore, git push via schannel; inspeccion TLS rompe OpenSSL
+- [Smart Route 2: asignacion post-ruteo](project_smart_route_2_flujo.md) — Unilever migra a ruteo libre + match por % via notes; maestro y Excel de planeacion quedan legacy
+- [Streamlit Cloud: version de Python](reference_streamlit_cloud_python_version.md) — runtime.txt se ignora; la version se fija en el dashboard. Python 3.14 = segfault con pandas/pyarrow
+- [Busqueda por reference case-sensitive](reference_simpliroute_reference_case_sensitive.md) — GET .../visits/reference/{ref}/ distingue mayus/minus; reintentar en mayusculas si da "no encontrado"
+- [Conector datamart-mcp](reference_datamart_mcp.md) — MCP de solo lectura a datos operacionales SR; confirmado funcionando (tools disponibles via ToolSearch)
+- [Cuentas Brightcell migradas](project_cuentas_brightcell_migradas.md) — Telefonica/Omnicanalidad/Biobio/Entel: mismas cuentas "Likewise", renombradas a Brightcell en produccion
