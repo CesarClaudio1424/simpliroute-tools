@@ -3,7 +3,14 @@ import streamlit as st
 from config import API_BASE, ACCOUNT_LOOKUP_COUNTRIES, ACCOUNT_LOOKUP_TIMEOUT, RETOOL_ACCOUNT_LOOKUP_URL
 from utils import render_tip
 
-PRIMARY_COUNTRIES = [codigo for codigo, _ in ACCOUNT_LOOKUP_COUNTRIES]
+PRIMARY_COUNTRIES = [codigo for codigo, _ in ACCOUNT_LOOKUP_COUNTRIES if codigo != "OTHER"]
+MIN_CHARS_AUTOBUSCAR = 2
+
+ADMIN_PORTAL_URL = f"{API_BASE}/accounts/admin-portal/accounts/"
+ADMIN_PORTAL_STATUSES = ["active", "trialing"]
+ADMIN_PORTAL_PAGE_SIZE = 50
+ADMIN_PORTAL_MAX_PAGES = 5
+ADMIN_PORTAL_MAX_MATCHES = 25
 
 
 def _run_retool_query(query_name: str, params: list):
@@ -48,6 +55,48 @@ def buscar_cuentas(country: str) -> list[dict]:
     ]
 
 
+def _get_staff_token() -> str | None:
+    try:
+        return st.secrets["account_lookup"]["staff_token"]
+    except (KeyError, AttributeError):
+        return None
+
+
+def buscar_cuentas_otros(query: str) -> list[dict]:
+    """Cuentas fuera de los paises principales, via API Admin Portal de SimpliRoute
+    (requiere Staff Token interno — [account_lookup].staff_token en secrets)."""
+    staff_token = _get_staff_token()
+    if not staff_token:
+        raise RuntimeError("Falta configurar [account_lookup].staff_token en secrets.")
+
+    headers = {"Authorization": f"Token {staff_token}", "Accept": "application/json"}
+    matches: dict[int, dict] = {}
+    for status in ADMIN_PORTAL_STATUSES:
+        for page in range(1, ADMIN_PORTAL_MAX_PAGES + 1):
+            params = {"status": status, "page": page, "page_size": ADMIN_PORTAL_PAGE_SIZE}
+            if query.strip():
+                params["search"] = query.strip()
+            response = requests.get(ADMIN_PORTAL_URL, headers=headers, params=params, timeout=ACCOUNT_LOOKUP_TIMEOUT)
+            if response.status_code in (401, 403):
+                raise RuntimeError("El Staff Token no es valido o no tiene permisos suficientes.")
+            response.raise_for_status()
+            payload = response.json()
+            for row in payload.get("results", []):
+                country = str(row.get("country") or "").strip().upper()
+                status_val = row.get("status")
+                account_id = row.get("id")
+                if country in PRIMARY_COUNTRIES or status_val not in ADMIN_PORTAL_STATUSES or not account_id:
+                    continue
+                matches[account_id] = {
+                    "id": account_id, "name": row.get("name", ""),
+                    "country": country, "status": status_val,
+                }
+            if not payload.get("next") or len(matches) >= ADMIN_PORTAL_MAX_MATCHES:
+                break
+
+    return list(matches.values())[:ADMIN_PORTAL_MAX_MATCHES]
+
+
 def resolver_token(account_id: int) -> str | None:
     """Token de API de una cuenta (query Retool GetToken)."""
     data = _run_retool_query("GetToken", [account_id])
@@ -78,7 +127,8 @@ def render_sidebar_cuenta_activa():
         st.markdown(f"🟢 **Cuenta activa:**  \n{activa['name']}")
         if st.button("Quitar cuenta activa", key="cuenta_activa_quitar", use_container_width=True):
             st.session_state["cuenta_activa"] = None
-            st.session_state.pop("sidebar_al_resultados", None)
+            for key in [k for k in st.session_state if k.startswith("sidebar_al_cache_")]:
+                st.session_state.pop(key, None)
             st.rerun()
         return
 
@@ -94,17 +144,30 @@ def render_sidebar_cuenta_activa():
             key="sidebar_al_nombre",
         )
 
-        if st.button("Buscar", key="sidebar_al_buscar", use_container_width=True):
-            with st.spinner("Consultando catalogo..."):
-                try:
-                    st.session_state["sidebar_al_resultados"] = buscar_cuentas(pais)
-                except requests.exceptions.RequestException as e:
-                    st.error(f"Error: {e}")
-                    st.session_state["sidebar_al_resultados"] = []
+        es_otros = pais == "OTHER"
+        query = nombre.strip()
+        cache_key = f"sidebar_al_cache_OTHER::{query.lower()}" if es_otros else f"sidebar_al_cache_{pais}"
+        ya_cargado = cache_key in st.session_state
+        puede_autocargar = len(query) >= MIN_CHARS_AUTOBUSCAR
+        autocargar = not ya_cargado and puede_autocargar
+        boton_deshabilitado = es_otros and not puede_autocargar
 
-        resultados = st.session_state.get("sidebar_al_resultados", [])
-        if nombre.strip():
-            filtro = nombre.strip().lower()
+        clic = st.button(
+            "Buscar" if es_otros else "Cargar cuentas", key="sidebar_al_buscar",
+            use_container_width=True, disabled=boton_deshabilitado,
+        )
+        if (clic or autocargar) and not boton_deshabilitado:
+            with st.spinner("Consultando..."):
+                try:
+                    st.session_state[cache_key] = buscar_cuentas_otros(query) if es_otros else buscar_cuentas(pais)
+                except (requests.exceptions.RequestException, RuntimeError) as e:
+                    st.error(f"Error: {e}")
+                    st.session_state[cache_key] = []
+            ya_cargado = True
+
+        resultados = st.session_state.get(cache_key, [])
+        if not es_otros and query:
+            filtro = query.lower()
             resultados = [c for c in resultados if filtro in c["name"].lower()]
 
         for cuenta in resultados[:10]:
@@ -127,8 +190,12 @@ def render_sidebar_cuenta_activa():
 
         if len(resultados) > 10:
             st.caption(f"+{len(resultados) - 10} mas — refina el nombre para acotar.")
-        elif nombre.strip() and "sidebar_al_resultados" in st.session_state and not resultados:
+        elif ya_cargado and query and not resultados:
             st.caption("Sin resultados para ese nombre en el pais seleccionado.")
+        elif es_otros and not puede_autocargar:
+            st.caption("Escribe al menos 2 letras para buscar en Otros paises (usa el directorio Admin Portal, no el catalogo).")
+        elif not es_otros and not ya_cargado:
+            st.caption("Escribe al menos 2 letras para ver un prelistado, o carga el catalogo completo.")
 
 
 def campo_token(key_prefix: str, placeholder: str = "Ingresa el token de API", label_visibility: str = "collapsed") -> str:

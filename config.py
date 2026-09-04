@@ -39,5 +39,6 @@ RETOOL_ACCOUNT_LOOKUP_URL = "https://simpliroute.tryretool.com/api/public/76dab1
 ACCOUNT_LOOKUP_COUNTRIES = [
     ("MX", "Mexico"), ("CL", "Chile"), ("PE", "Peru"),
     ("AR", "Argentina"), ("BR", "Brasil"), ("CO", "Colombia"),
+    ("OTHER", "Otros paises"),
 ]
 ACCOUNT_LOOKUP_TIMEOUT = 15
