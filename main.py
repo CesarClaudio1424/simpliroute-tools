@@ -23,12 +23,32 @@ from validador_plan import pagina_validador_plan
 from motivos_rechazo import pagina_motivos_rechazo
 from consulta_extensiones import pagina_consulta_extensiones
 from account_lookup import render_sidebar_cuenta_activa
+from utils import render_label
 
 st.set_page_config(
     page_title="SimpliRoute Tools",
     page_icon="🚚",
     layout="centered",
 )
+
+CATEGORIAS = {
+    "📍 Visitas": [
+        "Edicion Masiva de Visitas", "Mover Visitas Likewise", "Recuperar Visitas LVP",
+        "Detalle Visitas LVP", "Eliminar Visitas", "Eliminar Visitas BAT", "Eliminacion de Items",
+    ],
+    "🔔 Webhooks y Checkout": [
+        "Webhooks Likewise", "Checkout General", "Checkout BAT", "Reenvio de Webhooks",
+    ],
+    "🗺️ Rutas, Planes y Flotas": [
+        "Cambio de Fechas", "Eventos de Ruta", "Validador de Plan", "Flotas", "Asignacion Fija Uni 2",
+    ],
+    "⚙️ Configuracion de Cuenta": [
+        "Bloqueo LVP", "Zonas KML", "Motivos de Rechazo",
+    ],
+    "📊 Reportes y Consultas": [
+        "Reporte Visitas/Rutas", "Consulta Extensiones",
+    ],
+}
 
 # Force reload v2
 
@@ -62,10 +82,15 @@ with st.sidebar:
 
     st.markdown("---")
 
+    render_label("Categoria")
+    categoria = st.selectbox(
+        "Categoria", list(CATEGORIAS.keys()),
+        label_visibility="collapsed", key="nav_categoria",
+    )
+
     pagina = st.radio(
-        "Herramienta",
-        ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Zonas KML", "Motivos de Rechazo", "Recuperar Visitas LVP", "Detalle Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas", "Consulta Extensiones", "Validador de Plan"],
-        label_visibility="collapsed",
+        "Herramienta", CATEGORIAS[categoria],
+        label_visibility="collapsed", key=f"nav_pagina_{categoria}",
     )
 
     st.markdown("---")
