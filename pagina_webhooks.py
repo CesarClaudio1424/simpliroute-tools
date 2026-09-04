@@ -1,8 +1,5 @@
 import streamlit as st
 import webhook
-import math
-from datetime import timedelta
-from config import CLEANUP_NUM_BATCHES, MAX_BLOCK_SIZE
 from utils import (
     render_header, render_guide, render_stat, render_label,
     render_tip, render_error_item, render_cuenta_badge,
@@ -21,7 +18,7 @@ def pagina_webhooks():
             '<strong>Ingresa los datos</strong> — Creacion/Inicio/Checkout: <code>route_id</code> (UUID) de SimpliRoute. Exclusiones: IDs de visita. Uno por linea.',
             '<strong>Procesa</strong> — Las rutas se envian una a una. Las exclusiones se envian todas en un solo request.',
         ],
-        tip='Creacion, Inicio y Checkout reenvian el webhook nativo de SimpliRoute (igual que la pestaña Rutas de Reenvio de Webhooks / Checkout General). Exclusiones sigue yendo directo al middleware Likewise.',
+        tip='Creacion, Inicio y Checkout reenvian el webhook nativo de SimpliRoute (igual que la pestaña Rutas de Reenvio de Webhooks / Checkout General). Exclusiones va al gateway Hermes/Brightcell: primero resuelve cada ID contra SimpliRoute (reference), luego excluye en Hermes.',
     )
 
     # --- Paso 1: Cuenta ---
@@ -78,33 +75,13 @@ def pagina_webhooks():
 
     # --- Paso opcional: eliminar de SimpliRoute ---
     eliminar_sr = False
-    fecha_limpieza = None
     if exclusion:
         st.divider()
         eliminar_sr = st.checkbox(
             "Tambien eliminar visitas de SimpliRoute",
-            help="Quita la ruta y mueve la fecha a 2020-01-01 para cada visita excluida",
+            help="Quita la ruta y mueve la fecha a 2020-01-01, solo para las visitas que Hermes confirme excluidas",
             key="wh_eliminar_sr",
         )
-        if eliminar_sr:
-            render_tip(
-                "Se consultaran las visitas del rango indicado (max 7 dias), se identificaran las excluidas "
-                "y se les quitara la ruta, moviendo su fecha a 2020-01-01."
-            )
-            col_desde, col_hasta = st.columns(2)
-            with col_desde:
-                fecha_desde = st.date_input("Desde", key="wh_fecha_desde")
-            with col_hasta:
-                fecha_hasta = st.date_input("Hasta", key="wh_fecha_hasta")
-            if fecha_desde and fecha_hasta:
-                if fecha_hasta < fecha_desde:
-                    st.error("La fecha 'Hasta' debe ser igual o posterior a 'Desde'")
-                    fecha_limpieza = None
-                elif (fecha_hasta - fecha_desde).days > 6:
-                    st.error("El rango no puede ser mayor a 7 dias")
-                    fecha_limpieza = None
-                else:
-                    fecha_limpieza = (fecha_desde, fecha_hasta)
 
     acciones_sel = []
     if creacion:
@@ -133,93 +110,45 @@ def pagina_webhooks():
 
     # --- Procesamiento ---
     if exclusion:
-        url_exclusion = webhook.EXCLUSION_ENDPOINTS[cuenta]
-        barra = st.progress(0, text="Enviando exclusiones...")
-        ok, status, body = webhook.procesar_exclusion(items, url_exclusion)
+        token_key = webhook.ACCOUNT_TOKENS[cuenta]
+        token = load_secret(token_key, f"Token de {cuenta} no encontrado en secrets (api_config.{token_key})")
+        api_key = webhook.obtener_hermes_api_key(cuenta)
+        if not api_key:
+            st.error(f"Falta la clave Hermes de {cuenta} en secrets ([brightcell_hermes].{webhook.HERMES_KEYS[cuenta]}).")
+            st.stop()
+
+        barra = st.progress(0, text="Resolviendo referencias y excluyendo via Hermes...")
+        detalle, sin_resolver, confirmados = webhook.procesar_exclusion_hermes(token, api_key, items)
         barra.progress(1.0, text="Finalizado")
 
-        if ok:
-            st.success(f"{len(items)} visitas excluidas correctamente")
-        else:
-            detalle = "respuesta vacia" if status == 200 else f"HTTP {status}"
-            render_error_item(f"Error al excluir las visitas ({detalle})")
-            if body.strip():
-                with st.expander("Detalle del error"):
-                    st.code(body[:500])
+        if confirmados:
+            st.success(f"{len(confirmados)} visita(s) excluidas correctamente en Hermes")
 
-        # --- Limpieza opcional en SimpliRoute ---
-        if ok and eliminar_sr and fecha_limpieza:
+        rechazados = [d for d in detalle if d["status"] != "ok"]
+        if rechazados:
+            render_error_item(f"{len(rechazados)} visita(s) rechazadas por Hermes")
+            with st.expander("Detalle de rechazos Hermes"):
+                st.json(rechazados)
+
+        if sin_resolver:
+            render_error_item(f"{len(sin_resolver)} referencia(s) no se encontraron en SimpliRoute")
+            with st.expander("Detalle de referencias no resueltas"):
+                st.json(sin_resolver)
+
+        # --- Limpieza opcional en SimpliRoute (solo lo confirmado por Hermes) ---
+        if eliminar_sr and confirmados:
             st.divider()
             render_label("Limpieza en SimpliRoute")
 
-            token_key = webhook.ACCOUNT_TOKENS[cuenta]
-            token = load_secret(token_key, f"Token de {cuenta} no encontrado en secrets (api_config.{token_key})")
-
-            fecha_desde, fecha_hasta = fecha_limpieza
-            total_dias = (fecha_hasta - fecha_desde).days + 1
-            visitas = []
-            with st.spinner(f"Consultando visitas ({total_dias} dia{'s' if total_dias > 1 else ''})..."):
-                try:
-                    for i in range(total_dias):
-                        fecha_str = (fecha_desde + timedelta(days=i)).strftime("%Y-%m-%d")
-                        visitas.extend(webhook.obtener_visitas_fecha(token, fecha_str))
-                except Exception as e:
-                    st.error(f"Error al consultar visitas: {e}")
-                    st.stop()
-
-            refs_excluidos = set(items)
-            refs_encontrados = {v.get("reference") for v in visitas if v.get("reference") in refs_excluidos}
-            visitas_a_limpiar = [v for v in visitas if v.get("reference") in refs_excluidos and not v.get("route")]
-            visitas_con_ruta = [v for v in visitas if v.get("reference") in refs_excluidos and v.get("route")]
-            no_encontrados = refs_excluidos - refs_encontrados
-
-            rango_txt = fecha_desde.strftime("%Y-%m-%d") if total_dias == 1 else f"{fecha_desde.strftime('%Y-%m-%d')} a {fecha_hasta.strftime('%Y-%m-%d')}"
-            st.info(f"Busqueda completada: {len(visitas)} visitas consultadas en {rango_txt}")
-
-            if no_encontrados:
-                st.warning(f"{len(no_encontrados)} de {len(refs_excluidos)} references no se encontraron en {rango_txt}")
-                with st.expander("Ver references no encontrados"):
-                    st.code("\n".join(sorted(no_encontrados)))
-
-            if visitas_con_ruta:
-                st.warning(f"{len(visitas_con_ruta)} visitas ya tienen ruta asignada y no se limpiaran")
-                with st.expander("Ver visitas con ruta"):
-                    st.code("\n".join(str(v.get("reference") or v.get("id")) for v in visitas_con_ruta))
-
-            if not visitas_a_limpiar:
-                st.info("No hay visitas para limpiar.")
+            ok_l, status_l, body_l = webhook.limpiar_visitas_hermes(token, confirmados)
+            if ok_l:
+                st.success(f"{len(confirmados)} visita(s) limpiadas en SimpliRoute")
             else:
-                st.info(f"{len(visitas_a_limpiar)} de {len(items)} visitas se limpiaran en {rango_txt}")
-
-                total_l = len(visitas_a_limpiar)
-                exitosos_l = 0
-                batch_size = min(math.ceil(total_l / CLEANUP_NUM_BATCHES), MAX_BLOCK_SIZE)
-                batches = [visitas_a_limpiar[i:i + batch_size] for i in range(0, total_l, batch_size)]
-                total_batches = len(batches)
-                barra_l, contador_l, errores_l = create_progress_tracker(total_batches, "Limpiando visitas...")
-
-                for idx, batch in enumerate(batches):
-                    ok_l, status_l, body_l = webhook.limpiar_visitas_batch(token, batch)
-                    procesados_l = idx + 1
-
-                    if ok_l:
-                        exitosos_l += len(batch)
-                    else:
-                        refs = ", ".join(v.get("reference", str(v["id"])) for v in batch)
-                        with errores_l:
-                            render_error_item(f"Lote {procesados_l} ({refs}) — HTTP {status_l}")
-                            if body_l:
-                                st.code(body_l[:500])
-
-                    update_progress(barra_l, contador_l, procesados_l, total_batches, "Limpiando visitas...")
-
-                finish_progress(barra_l)
-
-                if exitosos_l > 0:
-                    st.success(f"{exitosos_l} de {total_l} visitas limpiadas en SimpliRoute")
-                if exitosos_l < total_l:
-                    st.error(f"{total_l - exitosos_l} visitas no se pudieron limpiar")
-            scroll_to_bottom()
+                render_error_item(f"No se pudieron limpiar las visitas (HTTP {status_l})")
+                if body_l:
+                    with st.expander("Detalle del error"):
+                        st.code(body_l[:500])
+        scroll_to_bottom()
     else:
         token_post = load_secret("checkout_token", "Token `checkout_token` no encontrado en secrets (api_config.checkout_token)")
         token_key = webhook.ACCOUNT_TOKENS[cuenta]

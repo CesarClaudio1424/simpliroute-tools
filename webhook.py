@@ -1,16 +1,20 @@
 import requests
 import time
+import streamlit as st
 from config import (
-    API_BASE, REQUEST_TIMEOUT, CLEANUP_TIMEOUT, WEBHOOK_DELAY,
+    API_BASE, REQUEST_TIMEOUT, CLEANUP_TIMEOUT,
     API_SEND_WEBHOOKS, API_SEND_ROUTE_WEBHOOKS, MAX_RETRIES, RETRY_BASE_DELAY,
 )
 
-# Exclusion sigue yendo directo al middleware Likewise (sin equivalente nativo en SimpliRoute)
-EXCLUSION_ENDPOINTS = {
-    "Telefonica": "https://us-central1-likewizemiddleware-telefonica.cloudfunctions.net/likewize/webhook/visits/support",
-    "Entel": "https://us-central1-likewizemiddleware-entel.cloudfunctions.net/likewize/webhook/visits/support",
-    "Omnicanalidad": "https://us-central1-likewizemiddleware-omni.cloudfunctions.net/likewize/webhook/visits/support",
-    "Biobio": "https://us-central1-likewizemiddleware-biobio.cloudfunctions.net/likewize/webhook/visits/support",
+# Exclusion via gateway Hermes/Brightcell (el middleware Likewise viejo fue retirado)
+HERMES_URL = "https://connect.simpliroute.com/brightcell/reprocess"
+
+# nombre de la clave por cuenta en secrets [brightcell_hermes]
+HERMES_KEYS = {
+    "Telefonica": "telefonica",
+    "Entel": "entel",
+    "Omnicanalidad": "omnicanalidad",
+    "Biobio": "biobio",
 }
 
 
@@ -30,41 +34,96 @@ ACCOUNT_IDS = {
 }
 
 
-def obtener_visitas_fecha(token, fecha):
-    headers = {"Authorization": f"Token {token}"}
-    url = f"{API_BASE}/routes/visits/?planned_date={fecha}"
-    visitas = []
-    while url:
-        resp = requests.get(url, headers=headers, timeout=CLEANUP_TIMEOUT)
-        resp.raise_for_status()
-        data = resp.json()
-        if isinstance(data, list):
-            visitas.extend(data)
-            url = None
-        else:
-            visitas.extend(data.get("results", []))
-            url = data.get("next")
-    return visitas
-
-
-def limpiar_visitas_batch(token, visitas):
-    url = f"{API_BASE}/routes/visits/"
-    headers = {
-        "Authorization": f"Token {token}",
-        "Content-Type": "application/json",
-    }
-    payload = [{"id": v["id"], "title": v.get("title", ""), "address": v.get("address", ""), "route": "", "planned_date": "2020-01-01"} for v in visitas]
+def obtener_hermes_api_key(cuenta):
     try:
-        resp = requests.put(url, headers=headers, json=payload, timeout=CLEANUP_TIMEOUT)
+        return st.secrets["brightcell_hermes"][HERMES_KEYS[cuenta]]
+    except (KeyError, AttributeError):
+        return None
+
+
+def resolver_visita_por_reference(token, reference):
+    """GET /v1/routes/visits/reference/{reference}/ -- IDs de SimpliRoute que coinciden (puede haber mas de uno)."""
+    url = f"{API_BASE}/routes/visits/reference/{reference}/"
+    headers = {"Authorization": f"Token {token}"}
+    try:
+        resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+    except requests.exceptions.RequestException as e:
+        return [], f"Error de conexion: {str(e)}"
+    if resp.status_code != 200:
+        return [], f"HTTP {resp.status_code}: {resp.text[:300]}"
+    data = resp.json()
+    if isinstance(data, dict) and "results" in data:
+        registros = data["results"]
+    elif isinstance(data, list):
+        registros = data
+    elif isinstance(data, dict) and "id" in data:
+        registros = [data]
+    else:
+        registros = []
+    ids = [r["id"] for r in registros if r.get("id")]
+    return ids, None
+
+
+def excluir_visitas_hermes(api_key, visita_ids):
+    """POST a Hermes (accion exclude_visits). visita_ids = IDs de SimpliRoute ya resueltos."""
+    headers = {"Authorization": f"ApiKey {api_key}", "Content-Type": "application/json"}
+    payload = {"action": "exclude_visits", "ids": [int(v) for v in visita_ids]}
+    try:
+        resp = requests.post(HERMES_URL, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+    except requests.exceptions.RequestException as e:
+        return None, 0, f"Error de conexion: {str(e)}"
+    if resp.status_code != 200:
+        return None, resp.status_code, resp.text[:500]
+    try:
+        return resp.json().get("results", []), resp.status_code, None
+    except ValueError:
+        return None, resp.status_code, "Respuesta no es JSON valido"
+
+
+def limpiar_visitas_hermes(token, visita_ids):
+    """PATCH minimo (route + planned_date) para las visitas que Hermes confirmo excluidas."""
+    url = f"{API_BASE}/routes/visits/"
+    headers = {"Authorization": f"Token {token}", "Content-Type": "application/json"}
+    payload = [{"id": int(vid), "route": "", "planned_date": "2020-01-01"} for vid in visita_ids]
+    try:
+        resp = requests.patch(url, headers=headers, json=payload, timeout=CLEANUP_TIMEOUT)
         return resp.status_code == 200, resp.status_code, resp.text
     except requests.exceptions.RequestException as e:
         return False, 0, f"Error de conexion: {str(e)}"
 
 
-def enviar_webhook(url, payload):
-    headers = {"Content-Type": "application/json"}
-    response = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
-    return response.status_code, response.text
+def procesar_exclusion_hermes(token, api_key, references):
+    """Resuelve cada reference a su(s) ID(s) de SimpliRoute y los excluye via Hermes.
+    Devuelve (detalle_por_id, sin_resolver, ids_confirmados) -- la limpieza en SimpliRoute
+    queda a cargo del llamador (solo debe aplicarse a ids_confirmados)."""
+    mapa_id_reference = {}
+    sin_resolver = []
+    for ref in references:
+        ids, err = resolver_visita_por_reference(token, ref)
+        if err or not ids:
+            sin_resolver.append({"reference": ref, "error": err or "No se encontraron visitas con ese reference."})
+            continue
+        for vid in ids:
+            mapa_id_reference[vid] = ref
+
+    if not mapa_id_reference:
+        return [], sin_resolver, []
+
+    resultados, status, err = excluir_visitas_hermes(api_key, list(mapa_id_reference.keys()))
+    if err:
+        detalle_err = [{"reference": ref, "id": vid, "status": "error", "error": err} for vid, ref in mapa_id_reference.items()]
+        return detalle_err, sin_resolver, []
+
+    detalle = []
+    confirmados = []
+    for r in resultados:
+        vid = int(r["id"])
+        ref = mapa_id_reference.get(vid, "?")
+        if r.get("status") == "ok":
+            confirmados.append(vid)
+        detalle.append({"reference": ref, "id": vid, "status": r.get("status"), "error": r.get("error")})
+
+    return detalle, sin_resolver, confirmados
 
 
 def _post_con_reintentos(url, headers, payload):
@@ -115,14 +174,3 @@ def procesar_checkout(token_get, token_post, account_id, route_id):
     headers = {"Authorization": f"Token {token_post}", "Content-Type": "application/json"}
     payload = {"account_ids": [account_id], "planned_date": planned_date, "route_ids": [route_id]}
     return _post_con_reintentos(API_SEND_WEBHOOKS, headers, payload)
-
-
-def procesar_exclusion(visita_ids, url):
-    payload = {"visits": [int(v) for v in visita_ids]}
-    try:
-        status, body = enviar_webhook(url, payload)
-        time.sleep(WEBHOOK_DELAY)
-        ok = status == 200 and body.strip() != ""
-        return ok, status, body
-    except requests.exceptions.RequestException as e:
-        return False, 0, f"Error de conexion: {str(e)}"
