@@ -9,6 +9,7 @@ from utils import (
     render_header, render_guide, render_label, render_stat,
     render_tip, render_cuenta_badge, render_error_item,
 )
+from account_lookup import campo_token
 
 MARGEN_CAPACIDAD = 1.2  # 20% de holgura sobre la carga asignada
 
@@ -125,10 +126,7 @@ def pagina_validador_plan():
     )
 
     render_label("Paso 1 · Token")
-    token = st.text_input(
-        "Token", type="password", label_visibility="collapsed",
-        placeholder="Token de API", key="vp_token",
-    )
+    token = campo_token("vp", placeholder="Token de API")
     if not token or not token.strip():
         render_tip("Ingresa el token de la cuenta para poder cruzar los vehiculos y sus capacidades.")
         st.stop()

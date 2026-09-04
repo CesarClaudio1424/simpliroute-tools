@@ -8,6 +8,7 @@ from utils import (
     render_tip, render_error_item,
     create_progress_tracker, update_progress, finish_progress,
 )
+from account_lookup import campo_token
 
 
 def eliminar_items(token, visit_id, item_ids):
@@ -47,7 +48,7 @@ def pagina_eliminacion_items():
 
     # --- Token ---
     render_label("Token de API")
-    token = st.text_input("Token", type="password", label_visibility="collapsed")
+    token = campo_token("elit")
 
     if not token or not token.strip():
         render_tip("Ingresa tu token de API de SimpliRoute para continuar.")

@@ -5,6 +5,7 @@ from utils import (
     render_header, render_guide, render_label, render_stat,
     render_tip, render_error_item, render_cuenta_badge,
 )
+from account_lookup import campo_token
 
 API_FLEETS = f"{API_BASE}/fleets/"
 API_USERS = f"{API_BASE}/accounts/users/"
@@ -502,13 +503,7 @@ def pagina_flotas():
     )
 
     render_label("Token de API")
-    token = st.text_input(
-        "Token",
-        type="password",
-        label_visibility="collapsed",
-        placeholder="Token de API SimpliRoute",
-        key="fl_token",
-    )
+    token = campo_token("fl", placeholder="Token de API SimpliRoute")
 
     if not token:
         render_tip("Ingresa el token de la cuenta para continuar.")

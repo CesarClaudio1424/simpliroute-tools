@@ -11,6 +11,7 @@ from utils import (
     render_cuenta_badge, render_tip,
     create_progress_tracker, update_progress, finish_progress,
 )
+from account_lookup import campo_token
 
 CLEANUP_WORKERS = 10
 
@@ -227,13 +228,7 @@ def _df_visitas(visitas):
 def _paso_token(key_prefix):
     """Renderiza el input de token, valida y retorna (token, cuenta) o (None, None)."""
     render_label("Paso 1 · Token de API")
-    token_input = st.text_input(
-        "Token",
-        type="password",
-        label_visibility="collapsed",
-        placeholder="Ingresa el token de API",
-        key=f"{key_prefix}token_input",
-    )
+    token_input = campo_token(key_prefix.rstrip("_"), placeholder="Ingresa el token de API")
     if not token_input:
         render_tip("Ingresa el token de API de la cuenta.")
         return None, None

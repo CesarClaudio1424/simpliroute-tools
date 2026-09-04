@@ -19,6 +19,7 @@ from utils import (
     render_tip, render_error_item, render_cuenta_badge, load_secret,
     create_progress_tracker, update_progress, finish_progress,
 )
+from account_lookup import campo_token
 
 
 UUID_RE = re.compile(
@@ -261,13 +262,7 @@ def _seccion_planes(token_post):
         ids_finales = validos
     else:
         render_label("Token de la cuenta (solo para la busqueda)")
-        token_get = st.text_input(
-            "Token GET planes",
-            type="password",
-            label_visibility="collapsed",
-            placeholder="Token de API de la cuenta donde estan los planes",
-            key="rwp_token_get",
-        )
+        token_get = campo_token("rwp", placeholder="Token de API de la cuenta donde estan los planes")
         if not token_get or not token_get.strip():
             render_tip("Ingresa el token de la cuenta para listar sus planes. El envio del webhook seguira usando <code>checkout_token</code>.")
             return
@@ -408,13 +403,7 @@ def _seccion_rutas(token_post):
         ids_finales = validos
     else:
         render_label("Token de la cuenta (solo para la busqueda)")
-        token_get = st.text_input(
-            "Token GET rutas",
-            type="password",
-            label_visibility="collapsed",
-            placeholder="Token de API de la cuenta donde estan las rutas",
-            key="rwr_token_get",
-        )
+        token_get = campo_token("rwr", placeholder="Token de API de la cuenta donde estan las rutas")
         if not token_get or not token_get.strip():
             render_tip("Ingresa el token de la cuenta para listar sus rutas. El envio del webhook seguira usando <code>checkout_token</code>.")
             return
@@ -580,13 +569,7 @@ def _seccion_visitas(token_post):
         ids_finales = validos
     else:
         render_label("Token de la cuenta (solo para la busqueda)")
-        token_get = st.text_input(
-            "Token GET visitas",
-            type="password",
-            label_visibility="collapsed",
-            placeholder="Token de API de la cuenta donde estan las visitas",
-            key="rwv_token_get",
-        )
+        token_get = campo_token("rwv", placeholder="Token de API de la cuenta donde estan las visitas")
         if not token_get or not token_get.strip():
             render_tip("Ingresa el token de la cuenta para listar sus visitas. El envio del webhook seguira usando <code>checkout_token</code>.")
             return
