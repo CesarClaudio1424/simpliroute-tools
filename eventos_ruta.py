@@ -9,6 +9,7 @@ from utils import (
     render_tip, render_error_item, render_cuenta_badge,
     create_progress_tracker, update_progress, finish_progress,
 )
+from account_lookup import campo_token
 
 ROUTE_WORKERS = 10
 
@@ -124,13 +125,7 @@ def _tab_manual():
 
     # --- Paso 2: Token ---
     render_label("Paso 2 · Token")
-    token = st.text_input(
-        "Token",
-        type="password",
-        label_visibility="collapsed",
-        placeholder="Token de API",
-        key="ev_token",
-    )
+    token = campo_token("ev", placeholder="Token de API")
 
     if not token:
         render_tip("Ingresa el token de la cuenta para continuar.")

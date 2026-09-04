@@ -24,6 +24,7 @@ from detalle_visitas_lvp import pagina_detalle_visitas_lvp
 from validador_plan import pagina_validador_plan
 from motivos_rechazo import pagina_motivos_rechazo
 from consulta_extensiones import pagina_consulta_extensiones
+from account_lookup import render_sidebar_cuenta_activa
 
 st.set_page_config(
     page_title="SimpliRoute Tools",
@@ -64,6 +65,10 @@ with st.sidebar:
         ["Edicion Masiva de Visitas", "Webhooks Likewise", "Mover Visitas Likewise", "Bloqueo LVP", "Reporte Visitas/Rutas", "Checkout General", "Checkout BAT", "Reenvio de Webhooks", "Eliminacion de Items", "Unilever", "Zonas KML", "Motivos de Rechazo", "Recuperar Visitas LVP", "Detalle Visitas LVP", "Eliminar Visitas BAT", "Eliminar Visitas", "Asignacion Fija Uni", "Asignacion Fija Uni 2", "Cambio de Fechas", "Eventos de Ruta", "Flotas", "Consulta Extensiones", "Validador de Plan"],
         label_visibility="collapsed",
     )
+
+    st.markdown("---")
+
+    render_sidebar_cuenta_activa()
 
     st.markdown("---")
 

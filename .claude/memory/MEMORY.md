@@ -10,3 +10,7 @@
 - [Cuentas Brightcell migradas](project_cuentas_brightcell_migradas.md) — Telefonica/Omnicanalidad/Biobio/Entel: mismas cuentas "Likewise", renombradas a Brightcell en produccion
 - [Memoria y skills versionados](project_memoria_skills_versionados.md) — .claude/commands, skills y memory ahora viajan con git; autoMemoryDirectory sin verificar aun
 - [Tokens acumulados en settings](reference_claude_settings_tokens_acumulados.md) — settings.json/settings.local.json tienen tokens reales en texto plano; nunca ampliar el gitignore sobre ellos
+- [Quirks de events/register SR](reference_simpliroute_events_register_quirks.md) — ROUTE_STARTED resetea status a started; ROUTE_FINISHED con date_time igual al end_time existente es no-op, desplazar +1s
+- [Clon repo colega Brandon](project_repo_colega_brandon.md) — c:\Proyectos\repo, origin=repo de Brandon, pruebas=pruebassimpli; no confundir con remotes de Edicion
+- [Migracion Next.js de Brandon](project_migracion_nextjs_brandon.md) — reescritura completa del stack; 8/21 herramientas ya migradas, 13 (Unilever, Zonas KML, etc) siguen dependiendo de este repo
+- [Buscador de cuenta via Retool](reference_account_lookup_retool.md) — "cuenta activa" global en la barra lateral (token oculto, solo muestra nombre); conectado en las 6 paginas con token manual

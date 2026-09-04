@@ -7,6 +7,7 @@ from utils import (
     render_header, render_guide, render_label, render_tip,
     render_stat,
 )
+from account_lookup import campo_token
 
 ZONA_DELAY = 0.5  # seconds between zone creation requests
 
@@ -297,10 +298,7 @@ def pagina_zonas_kml():
 
     # --- Token ---
     render_label("Token de API")
-    token = st.text_input(
-        "Token", type="password", placeholder="5d1fe9e...",
-        label_visibility="collapsed", key="kml_token",
-    )
+    token = campo_token("kml", placeholder="5d1fe9e...")
     if not token:
         render_tip("Ingresa el token de la cuenta SimpliRoute donde se crearan las zonas.")
         st.stop()

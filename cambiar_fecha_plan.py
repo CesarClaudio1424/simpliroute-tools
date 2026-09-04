@@ -11,6 +11,7 @@ from utils import (
     render_header, render_guide, render_label, render_stat,
     render_tip, render_error_item, render_cuenta_badge,
 )
+from account_lookup import campo_token
 
 ROUTE_WORKERS = 10
 PAGINATED_PAGE_SIZE = 500
@@ -191,13 +192,7 @@ def _seccion_plan():
     )
 
     render_label("Paso 1 · Token")
-    token = st.text_input(
-        "Token",
-        type="password",
-        label_visibility="collapsed",
-        placeholder="Token de API",
-        key="cfp_token",
-    )
+    token = campo_token("cfp", placeholder="Token de API")
     if not token or not token.strip():
         render_tip("Ingresa el token de API de la cuenta.")
         return
@@ -367,13 +362,7 @@ def _seccion_rutas():
     )
 
     render_label("Paso 1 · Token")
-    token = st.text_input(
-        "Token",
-        type="password",
-        label_visibility="collapsed",
-        placeholder="Token de API",
-        key="cfr_token",
-    )
+    token = campo_token("cfr", placeholder="Token de API")
     if not token or not token.strip():
         render_tip("Ingresa el token de API de la cuenta.")
         return
@@ -599,13 +588,7 @@ def _seccion_visitas():
     )
 
     render_label("Paso 1 · Token")
-    token = st.text_input(
-        "Token",
-        type="password",
-        label_visibility="collapsed",
-        placeholder="Token de API",
-        key="cfv_token",
-    )
+    token = campo_token("cfv", placeholder="Token de API")
     if not token or not token.strip():
         render_tip("Ingresa el token de API de la cuenta.")
         return

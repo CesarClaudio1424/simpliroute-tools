@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 from config import API_BASE, EDIT_TIMEOUT, EDIT_DELAY
 from utils import render_header, render_guide, render_stat, render_label, render_tip
+from account_lookup import campo_token
 
 BATCH_SIZE = 200
 WORKERS = 4
@@ -96,7 +97,7 @@ def pagina_edicion():
 
     # --- Paso 1: Autenticacion ---
     render_label("Paso 1 · Token de API")
-    token = st.text_input("Token", type="password", label_visibility="collapsed", placeholder="Ingresa el token de API")
+    token = campo_token("edicion", placeholder="Ingresa el token de API")
 
     if token:
         token = token.strip()

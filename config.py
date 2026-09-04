@@ -33,3 +33,11 @@ OBSERVATION_DELAY = 0.3  # seconds between create/delete requests
 # Consulta Extensiones
 EXTENSIONES_QUERY_LIMIT = 500  # cap de filas por consulta (la tabla no filtra por cuenta propia, puede haber decenas de miles)
 EXTENSIONES_MIN_SEARCH_LEN = 3  # minimo de caracteres antes de permitir buscar
+
+# Buscador de cuenta (autocompletar token por nombre)
+RETOOL_ACCOUNT_LOOKUP_URL = "https://simpliroute.tryretool.com/api/public/76dab1ca-e7a8-4133-a8b3-692d49307567"
+ACCOUNT_LOOKUP_COUNTRIES = [
+    ("MX", "Mexico"), ("CL", "Chile"), ("PE", "Peru"),
+    ("AR", "Argentina"), ("BR", "Brasil"), ("CO", "Colombia"),
+]
+ACCOUNT_LOOKUP_TIMEOUT = 15

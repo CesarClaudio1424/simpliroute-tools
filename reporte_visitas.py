@@ -8,6 +8,7 @@ from utils import (
     render_tip, render_error_item, validar_email,
     create_progress_tracker, update_progress, finish_progress,
 )
+from account_lookup import campo_token
 
 
 def dividir_rango_por_dias(inicio, final, dias):
@@ -65,7 +66,7 @@ def pagina_reporte_visitas():
 
     # --- Paso 2: Token y correo ---
     render_label("Paso 2 · Token y correo")
-    token = st.text_input("Token", type="password", label_visibility="collapsed", placeholder="Token de API", key="rep_token")
+    token = campo_token("rep", placeholder="Token de API")
 
     if not token or not token.strip():
         render_tip(

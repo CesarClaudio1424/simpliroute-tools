@@ -3,6 +3,7 @@ import requests
 import streamlit as st
 from config import API_BASE, REQUEST_TIMEOUT, OBSERVATION_DELAY
 from utils import render_header, render_guide, render_label, render_tip, render_stat
+from account_lookup import campo_token
 
 OBSERVATIONS_URL = f"{API_BASE}/routes/observations/"
 
@@ -68,10 +69,7 @@ def pagina_motivos_rechazo():
     )
 
     render_label("Token de API")
-    token = st.text_input(
-        "Token", type="password", placeholder="5d1fe9e...",
-        label_visibility="collapsed", key="mr_token",
-    )
+    token = campo_token("mr", placeholder="5d1fe9e...")
     if not token:
         render_tip("Ingresa el token de la cuenta SimpliRoute donde se gestionaran los motivos.")
         st.stop()
