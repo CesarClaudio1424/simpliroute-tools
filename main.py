@@ -23,7 +23,6 @@ from validador_plan import pagina_validador_plan
 from motivos_rechazo import pagina_motivos_rechazo
 from consulta_extensiones import pagina_consulta_extensiones
 from account_lookup import render_sidebar_cuenta_activa
-from utils import render_label
 
 st.set_page_config(
     page_title="SimpliRoute Tools",
@@ -82,16 +81,30 @@ with st.sidebar:
 
     st.markdown("---")
 
-    render_label("Categoria")
-    categoria = st.selectbox(
-        "Categoria", list(CATEGORIAS.keys()),
-        label_visibility="collapsed", key="nav_categoria",
+    if "pagina_activa" not in st.session_state:
+        st.session_state.pagina_activa = CATEGORIAS["📍 Visitas"][0]
+
+    def _set_pagina_activa(radio_key):
+        st.session_state.pagina_activa = st.session_state[radio_key]
+
+    categoria_activa = next(
+        cat for cat, herramientas in CATEGORIAS.items()
+        if st.session_state.pagina_activa in herramientas
     )
 
-    pagina = st.radio(
-        "Herramienta", CATEGORIAS[categoria],
-        label_visibility="collapsed", key=f"nav_pagina_{categoria}",
-    )
+    for categoria, herramientas in CATEGORIAS.items():
+        with st.expander(categoria, expanded=(categoria == categoria_activa)):
+            radio_key = f"nav_radio_{categoria}"
+            if radio_key not in st.session_state:
+                st.session_state[radio_key] = (
+                    st.session_state.pagina_activa if categoria == categoria_activa else herramientas[0]
+                )
+            st.radio(
+                "Herramienta", herramientas, label_visibility="collapsed",
+                key=radio_key, on_change=_set_pagina_activa, args=(radio_key,),
+            )
+
+    pagina = st.session_state.pagina_activa
 
     st.markdown("---")
 
