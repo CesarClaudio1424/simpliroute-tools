@@ -22,6 +22,12 @@ from detalle_visitas_lvp import pagina_detalle_visitas_lvp
 from validador_plan import pagina_validador_plan
 from motivos_rechazo import pagina_motivos_rechazo
 from consulta_extensiones import pagina_consulta_extensiones
+from inspector_vehiculos import pagina_inspector_vehiculos
+from auditor_flotas import pagina_auditor_flotas
+from salud_gps import pagina_salud_gps
+from directorio_usuarios import pagina_directorio_usuarios
+from visibilidad_planes import pagina_visibilidad_planes
+from visitas_liverpool import pagina_visitas_liverpool
 from account_lookup import render_sidebar_cuenta_activa
 
 st.set_page_config(
@@ -34,6 +40,7 @@ CATEGORIAS = {
     "📍 Visitas": [
         "Edicion Masiva de Visitas", "Mover Visitas Likewise", "Recuperar Visitas LVP",
         "Detalle Visitas LVP", "Eliminar Visitas", "Eliminar Visitas BAT", "Eliminacion de Items",
+        "Visitas Liverpool",
     ],
     "🔔 Webhooks y Checkout": [
         "Webhooks Likewise", "Checkout General", "Checkout BAT", "Reenvio de Webhooks",
@@ -41,11 +48,14 @@ CATEGORIAS = {
     "🗺️ Rutas, Planes y Flotas": [
         "Cambio de Fechas", "Eventos de Ruta", "Validador de Plan", "Flotas", "Asignacion Fija Uni 2",
     ],
+    "🚚 Vehiculos y Flotas": [
+        "Inspector de Vehiculos", "Auditor de Flotas", "Salud GPS",
+    ],
     "⚙️ Configuracion de Cuenta": [
         "Bloqueo LVP", "Zonas KML", "Motivos de Rechazo",
     ],
     "📊 Reportes y Consultas": [
-        "Reporte Visitas/Rutas", "Consulta Extensiones",
+        "Reporte Visitas/Rutas", "Consulta Extensiones", "Directorio de Usuarios", "Visibilidad de Planes",
     ],
 }
 
@@ -155,6 +165,18 @@ elif pagina == "Flotas":
     pagina_flotas()
 elif pagina == "Consulta Extensiones":
     pagina_consulta_extensiones()
+elif pagina == "Inspector de Vehiculos":
+    pagina_inspector_vehiculos()
+elif pagina == "Auditor de Flotas":
+    pagina_auditor_flotas()
+elif pagina == "Salud GPS":
+    pagina_salud_gps()
+elif pagina == "Directorio de Usuarios":
+    pagina_directorio_usuarios()
+elif pagina == "Visibilidad de Planes":
+    pagina_visibilidad_planes()
+elif pagina == "Visitas Liverpool":
+    pagina_visitas_liverpool()
 else:
     pagina_validador_plan()
 

@@ -13,4 +13,5 @@
 - [Quirks de events/register SR](reference_simpliroute_events_register_quirks.md) — ROUTE_STARTED resetea status a started; ROUTE_FINISHED con date_time igual al end_time existente es no-op, desplazar +1s
 - [Clon repo colega Brandon](project_repo_colega_brandon.md) — c:\Proyectos\repo, origin=repo de Brandon, pruebas=pruebassimpli; no confundir con remotes de Edicion
 - [Migracion Next.js de Brandon](project_migracion_nextjs_brandon.md) — reescritura completa del stack; 8/21 herramientas ya migradas, 13 (Unilever, Zonas KML, etc) siguen dependiendo de este repo
-- [Buscador de cuenta via Retool](reference_account_lookup_retool.md) — "cuenta activa" global en la barra lateral (token oculto, solo muestra nombre); conectado en las 6 paginas con token manual
+- [Buscador de cuenta via Retool](reference_account_lookup_retool.md) — "cuenta activa" global en la barra lateral (token oculto); + pais "Otros" via Staff Token/Admin Portal
+- [Migracion Hermes/Brightcell](project_hermes_brightcell_migracion.md) — middleware Likewise viejo retirado por Brandon; Exclusiones migrado a Hermes, sin probar en vivo aun
