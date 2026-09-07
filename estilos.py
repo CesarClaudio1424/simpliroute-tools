@@ -308,6 +308,13 @@ def generar_css(THEME, dark):
         border-radius: 0.4rem !important;
         color: {THEME["text"]} !important;
     }}
+
+    /* Categorias del sidebar (acordeon): texto mas visible */
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary,
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary p {{
+        color: {"#f5f6ff" if dark else "#1a1a1a"} !important;
+        font-weight: 600 !important;
+    }}
     [data-testid="stSidebar"] .stRadio > div[role="radiogroup"] > label:hover {{
         background: {"rgba(255,255,255,0.05)" if dark else "rgba(42,43,161,0.06)"} !important;
     }}
