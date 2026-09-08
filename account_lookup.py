@@ -39,7 +39,15 @@ def _run_retool_query(query_name: str, params: list):
         timeout=ACCOUNT_LOOKUP_TIMEOUT,
     )
     response.raise_for_status()
-    return response.json().get("queryData", {})
+    try:
+        payload = response.json()
+    except ValueError:
+        raise RuntimeError(f"Retool ({query_name}) no devolvio JSON valido: {response.text[:200]}")
+    query_data = payload.get("queryData") if isinstance(payload, dict) else None
+    if not isinstance(query_data, dict):
+        detalle = payload.get("queryDataError") or payload.get("error") or payload if isinstance(payload, dict) else payload
+        raise RuntimeError(f"Retool ({query_name}) devolvio una respuesta inesperada: {str(detalle)[:200]}")
+    return query_data
 
 
 def buscar_cuentas(country: str) -> list[dict]:
@@ -175,7 +183,7 @@ def render_sidebar_cuenta_activa():
                 with st.spinner("Resolviendo..."):
                     try:
                         token = resolver_token(cuenta["id"])
-                    except requests.exceptions.RequestException as e:
+                    except (requests.exceptions.RequestException, RuntimeError) as e:
                         st.error(f"No se pudo resolver el token: {e}")
                         token = None
                 if not token:
