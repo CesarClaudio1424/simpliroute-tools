@@ -2,8 +2,6 @@ import copy
 import time
 
 import pandas as pd
-import psycopg2
-import psycopg2.extras
 import requests
 import streamlit as st
 
@@ -13,6 +11,23 @@ from utils import (
     render_cuenta_badge, render_stat,
     create_progress_tracker, update_progress, finish_progress,
 )
+
+# Catalogo fijo de extensiones reutilizables (igual al dropdown "Seleccionar la extension"
+# del Retool original, que tambien es una lista hardcodeada, no una consulta a la BD).
+# con_account_id=False solo para LIT: su URL nunca lleva el fragmento #account_id=... (confirmado
+# contra 1677 filas reales del export de extensions_extensions/extensions_userextensions).
+CATALOGO_EXTENSIONES = [
+    {"label": "CAT", "base_url": "https://simpliroute.tryretool.com/embedded/public/6fbcbd52-a7c0-4ba5-826a-6f73d6b4ec8a", "con_account_id": True},
+    {"label": "Visitas CAT", "base_url": "https://simpliroute.tryretool.com/embedded/public/81b2e2fe-4311-4d6b-b9a9-1c5e7ea610a4", "con_account_id": True},
+    {"label": "Zonas", "base_url": "https://simpliroute.tryretool.com/embedded/public/87697f2d-3b5b-418b-8f77-24c5c01b8976", "con_account_id": True},
+    {"label": "Cargas Manuales", "base_url": "https://simpliroute.tryretool.com/embedded/public/0fe79a86-6714-4335-b3f1-8a472e83caf7", "con_account_id": True},
+    {"label": "LIT", "base_url": "https://lit.app-sr.co/login", "con_account_id": False},
+    {"label": "Visitas GESTOR", "base_url": "https://simpliroute.tryretool.com/embedded/public/4c15ed97-9b53-4054-bfba-577387fe79fc", "con_account_id": True},
+    {"label": "Buscador de visitas", "base_url": "https://simpliroute.tryretool.com/embedded/public/08d2c196-1adb-4fa7-95e2-867e55115f19", "con_account_id": True},
+    {"label": "Eliminacion de Visitas", "base_url": "https://simpliroute.tryretool.com/embedded/public/2fea4292-4439-4be3-bc3e-ae7870669e06", "con_account_id": True},
+    {"label": "Tripulantes/Hom Plan", "base_url": "https://simpliroute.tryretool.com/embedded/public/44bf560d-19b7-499d-bb3e-4bff5b66cca8", "con_account_id": True},
+    {"label": "Seguimiento de pedido", "base_url": "https://simpliroute.tryretool.com/embedded/public/2fc8c0f9-6714-4c9b-b58b-c0d1f92c7d6e", "con_account_id": True},
+]
 
 
 @st.cache_data
@@ -68,41 +83,10 @@ def _listar_usuarios(account_id: int) -> tuple[list[dict], str]:
     return [{"id": i, "username": u} for i, u in zip(ids, usernames)], ""
 
 
-def _get_readonly_connection():
-    try:
-        cfg = st.secrets["readonly_bi"]
-        return psycopg2.connect(
-            host=cfg["host"],
-            port=cfg["port"],
-            dbname=cfg["dbname"],
-            user=cfg["user"],
-            password=cfg["password"],
-            connect_timeout=10,
-        )
-    except KeyError:
-        st.error("Faltan credenciales en secrets. Agregar [readonly_bi] con host, port, dbname, user y password.")
-        st.stop()
-    except psycopg2.OperationalError as e:
-        st.error(f"No se pudo conectar a la base de datos: {e}")
-        st.stop()
-
-
-def _listar_catalogo_extensiones() -> tuple[list[dict], str]:
-    """Catalogo completo de extensions_extensions (sin filtro de cuenta): id, label, urls."""
-    conn = _get_readonly_connection()
-    try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute("SELECT id, label, urls FROM extensions_extensions ORDER BY label")
-            return [dict(row) for row in cur.fetchall()], ""
-    except psycopg2.Error as e:
-        return [], str(e)
-    finally:
-        conn.close()
-
-
-def _asignar_extension(account_id: int, user_ids: list[int], label: str, base_url: str, staff_token: str):
+def _asignar_extension(account_id: int, user_ids: list[int], label: str, ext: dict, staff_token: str):
     """queryName=embedear (RESTQuery) del mismo endpoint Retool. Escribe la asignacion real."""
-    embed_url = f"{base_url.split('#')[0]}#account_id={account_id}"
+    base_url = ext["base_url"]
+    embed_url = f"{base_url}#account_id={account_id}" if ext["con_account_id"] else base_url
     payload = {
         "userParams": {
             "queryParams": {"length": 0},
@@ -153,7 +137,7 @@ def pagina_asignar_extensiones_lvp():
             "<strong>Cuenta</strong> — Elige la tienda Liverpool donde asignar.",
             "<strong>Usuarios</strong> — Carga el listado de usuarios de la cuenta y selecciona a quienes se les asignara.",
             "<strong>Label</strong> — Escribe el nombre con el que se mostrara la extension asignada.",
-            "<strong>Extension(es)</strong> — Carga el catalogo y selecciona una o varias extensiones a asignar.",
+            "<strong>Extension(es)</strong> — Selecciona una o varias extensiones del catalogo a asignar.",
             "<strong>Asignar</strong> — Se hace una solicitud por cada extension seleccionada, incluyendo a todos los usuarios elegidos.",
         ],
         tip="Esta herramienta escribe directamente en la plataforma (asigna acceso real a los usuarios). Revisa bien la seleccion antes de confirmar.",
@@ -210,27 +194,11 @@ def pagina_asignar_extensiones_lvp():
     )
 
     render_label("Paso 4 · Extension(es)")
-    if st.button("Cargar catalogo de extensiones", key="ael_btn_catalogo"):
-        with st.spinner("Consultando catalogo..."):
-            catalogo, err = _listar_catalogo_extensiones()
-        if err:
-            st.error(f"Error al cargar catalogo: {err}")
-        else:
-            st.session_state["ael_catalogo"] = catalogo
-
-    catalogo = st.session_state.get("ael_catalogo")
-    if catalogo is None:
-        render_tip("Carga el catalogo de extensiones para continuar.")
-        st.stop()
-    if not catalogo:
-        render_tip("No hay extensiones registradas en el catalogo.", warning=True)
-        st.stop()
-
-    opciones_ext = [f"{e['label']} (#{e['id']})" for e in catalogo]
+    opciones_ext = [e["label"] for e in CATALOGO_EXTENSIONES]
     sel_ext = st.multiselect(
         "Extensiones a asignar", opciones_ext, key="ael_sel_ext",
     )
-    extensiones_elegidas = [catalogo[i] for i, o in enumerate(opciones_ext) if o in sel_ext]
+    extensiones_elegidas = [e for e in CATALOGO_EXTENSIONES if e["label"] in sel_ext]
 
     if not usuarios_elegidos or not extensiones_elegidas or not label.strip():
         render_tip("Selecciona al menos un usuario, una extension y escribe un label para continuar.")
@@ -260,7 +228,7 @@ def pagina_asignar_extensiones_lvp():
     exitosos = 0
 
     for i, ext in enumerate(extensiones_elegidas):
-        ok, data, err, payload = _asignar_extension(account_id, user_ids, label.strip(), ext["urls"], staff_token)
+        ok, data, err, payload = _asignar_extension(account_id, user_ids, label.strip(), ext, staff_token)
         with st.expander(f"{'✓' if ok else '✗'} {ext['label']}", expanded=not ok):
             st.markdown("**Request:**")
             st.json(_payload_enmascarado(payload))
