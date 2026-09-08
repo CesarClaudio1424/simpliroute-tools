@@ -43,11 +43,28 @@ def _run_retool_query(query_name: str, params: list):
         payload = response.json()
     except ValueError:
         raise RuntimeError(f"Retool ({query_name}) no devolvio JSON valido: {response.text[:200]}")
-    query_data = payload.get("queryData") if isinstance(payload, dict) else None
-    if not isinstance(query_data, dict):
-        detalle = payload.get("queryDataError") or payload.get("error") or payload if isinstance(payload, dict) else payload
-        raise RuntimeError(f"Retool ({query_name}) devolvio una respuesta inesperada: {str(detalle)[:200]}")
-    return query_data
+    return _extraer_query_data(payload, query_name)
+
+
+def _extraer_query_data(payload, query_name: str) -> dict:
+    """Retool devuelve el resultado en uno de dos formatos segun la version del endpoint:
+    el clasico {"queryData": {columna: [valores]}}, o una lista [{"cols": [...], "data": [...]}]
+    donde "data" trae los resultados partidos en varios batches (mismas columnas, filas sin
+    solapar) que hay que concatenar por columna."""
+    if isinstance(payload, dict) and isinstance(payload.get("queryData"), dict):
+        return payload["queryData"]
+
+    if isinstance(payload, list) and payload and isinstance(payload[0], dict) and "cols" in payload[0]:
+        cols = payload[0].get("cols", [])
+        batches = payload[0].get("data", [])
+        combinado = {col: [] for col in cols}
+        for batch in batches:
+            for i, col in enumerate(cols):
+                combinado[col].extend(batch[i])
+        return combinado
+
+    detalle = payload.get("queryDataError") or payload.get("error") or payload if isinstance(payload, dict) else payload
+    raise RuntimeError(f"Retool ({query_name}) devolvio una respuesta inesperada: {str(detalle)[:200]}")
 
 
 def buscar_cuentas(country: str) -> list[dict]:
