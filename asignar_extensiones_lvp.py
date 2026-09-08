@@ -24,9 +24,9 @@ CATALOGO_EXTENSIONES = [
     {"label": "LIT", "base_url": "https://lit.app-sr.co/login", "con_account_id": False},
     {"label": "Visitas GESTOR", "base_url": "https://simpliroute.tryretool.com/embedded/public/4c15ed97-9b53-4054-bfba-577387fe79fc", "con_account_id": True},
     {"label": "Buscador de visitas", "base_url": "https://simpliroute.tryretool.com/embedded/public/08d2c196-1adb-4fa7-95e2-867e55115f19", "con_account_id": True},
-    {"label": "Eliminacion de Visitas", "base_url": "https://simpliroute.tryretool.com/embedded/public/2fea4292-4439-4be3-bc3e-ae7870669e06", "con_account_id": True},
+    {"label": "Eliminación de visitas", "base_url": "https://simpliroute.tryretool.com/embedded/public/2fea4292-4439-4be3-bc3e-ae7870669e06", "con_account_id": True},
     {"label": "Tripulantes/Hom Plan", "base_url": "https://simpliroute.tryretool.com/embedded/public/44bf560d-19b7-499d-bb3e-4bff5b66cca8", "con_account_id": True},
-    {"label": "Seguimiento de pedido", "base_url": "https://simpliroute.tryretool.com/embedded/public/2fc8c0f9-6714-4c9b-b58b-c0d1f92c7d6e", "con_account_id": True},
+    {"label": "Seguimiento de pedidos", "base_url": "https://simpliroute.tryretool.com/embedded/public/2fc8c0f9-6714-4c9b-b58b-c0d1f92c7d6e", "con_account_id": True},
 ]
 
 
@@ -83,7 +83,7 @@ def _listar_usuarios(account_id: int) -> tuple[list[dict], str]:
     return [{"id": i, "username": u} for i, u in zip(ids, usernames)], ""
 
 
-def _asignar_extension(account_id: int, user_ids: list[int], label: str, ext: dict, staff_token: str):
+def _asignar_extension(account_id: int, user_ids: list[int], ext: dict, staff_token: str):
     """queryName=embedear (RESTQuery) del mismo endpoint Retool. Escribe la asignacion real."""
     base_url = ext["base_url"]
     embed_url = f"{base_url}#account_id={account_id}" if ext["con_account_id"] else base_url
@@ -92,7 +92,7 @@ def _asignar_extension(account_id: int, user_ids: list[int], label: str, ext: di
             "queryParams": {"length": 0},
             "headersParams": {"0": staff_token, "length": 1},
             "cookiesParams": {"length": 0},
-            "bodyParams": {"0": account_id, "1": user_ids, "2": label, "3": embed_url, "length": 4},
+            "bodyParams": {"0": account_id, "1": user_ids, "2": ext["label"], "3": embed_url, "length": 4},
             "openAPIParamsParams": {"length": 0},
             "openAPIRequestBodyParams": None,
         },
@@ -136,7 +136,6 @@ def pagina_asignar_extensiones_lvp():
         steps=[
             "<strong>Cuenta</strong> — Elige la tienda Liverpool donde asignar.",
             "<strong>Usuarios</strong> — Carga el listado de usuarios de la cuenta y selecciona a quienes se les asignara.",
-            "<strong>Label</strong> — Escribe el nombre con el que se mostrara la extension asignada.",
             "<strong>Extension(es)</strong> — Selecciona una o varias extensiones del catalogo a asignar.",
             "<strong>Asignar</strong> — Se hace una solicitud por cada extension seleccionada, incluyendo a todos los usuarios elegidos.",
         ],
@@ -187,21 +186,15 @@ def pagina_asignar_extensiones_lvp():
     )
     usuarios_elegidos = [usuarios[i] for i, o in enumerate(opciones_usuarios) if o in sel_usuarios]
 
-    render_label("Paso 3 · Label")
-    label = st.text_input(
-        "Escribir label", key="ael_label", placeholder="Ingresar nombre del retool...",
-        label_visibility="collapsed",
-    )
-
-    render_label("Paso 4 · Extension(es)")
+    render_label("Paso 3 · Extension(es)")
     opciones_ext = [e["label"] for e in CATALOGO_EXTENSIONES]
     sel_ext = st.multiselect(
         "Extensiones a asignar", opciones_ext, key="ael_sel_ext",
     )
     extensiones_elegidas = [e for e in CATALOGO_EXTENSIONES if e["label"] in sel_ext]
 
-    if not usuarios_elegidos or not extensiones_elegidas or not label.strip():
-        render_tip("Selecciona al menos un usuario, una extension y escribe un label para continuar.")
+    if not usuarios_elegidos or not extensiones_elegidas:
+        render_tip("Selecciona al menos un usuario y una extension para continuar.")
         st.stop()
 
     st.markdown("---")
@@ -212,7 +205,7 @@ def pagina_asignar_extensiones_lvp():
         st.markdown(render_stat(len(extensiones_elegidas), "extension(es) seleccionadas"), unsafe_allow_html=True)
     render_tip(
         f"Se haran {len(extensiones_elegidas)} solicitud(es) (una por extension), cada una incluyendo a los "
-        f"{len(usuarios_elegidos)} usuario(s) seleccionados con el label <strong>{label.strip()}</strong>."
+        f"{len(usuarios_elegidos)} usuario(s) seleccionados con el nombre propio de cada extension."
     )
 
     confirmar = st.checkbox(
@@ -228,7 +221,7 @@ def pagina_asignar_extensiones_lvp():
     exitosos = 0
 
     for i, ext in enumerate(extensiones_elegidas):
-        ok, data, err, payload = _asignar_extension(account_id, user_ids, label.strip(), ext, staff_token)
+        ok, data, err, payload = _asignar_extension(account_id, user_ids, ext, staff_token)
         with st.expander(f"{'✓' if ok else '✗'} {ext['label']}", expanded=not ok):
             st.markdown("**Request:**")
             st.json(_payload_enmascarado(payload))
