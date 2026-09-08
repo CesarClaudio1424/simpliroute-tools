@@ -25,10 +25,10 @@ def _validar_cuenta(token):
     try:
         r = requests.get(f"{API_BASE}/accounts/me/", headers=_headers(token), timeout=REQUEST_TIMEOUT)
         if r.status_code == 200:
-            return True, r.json().get("account", {}).get("name", "Sin nombre")
-    except requests.exceptions.RequestException:
-        pass
-    return False, None
+            return True, r.json().get("account", {}).get("name", "Sin nombre"), None
+        return False, None, f"HTTP {r.status_code}: {r.text[:200]}"
+    except requests.exceptions.RequestException as e:
+        return False, None, str(e)
 
 
 # ── Plan API ──────────────────────────────────────────────────────────────────
@@ -198,9 +198,9 @@ def _seccion_plan():
         return
     token = token.strip()
 
-    valido, cuenta = _validar_cuenta(token)
+    valido, cuenta, detalle = _validar_cuenta(token)
     if not valido:
-        st.error("Token invalido. Revisa tu token de API.")
+        st.error(f"Token invalido. Revisa tu token de API.\n\n{detalle}")
         return
     render_cuenta_badge(f"✓ Conectado a: <strong>{cuenta}</strong>")
 
@@ -368,9 +368,9 @@ def _seccion_rutas():
         return
     token = token.strip()
 
-    valido, cuenta = _validar_cuenta(token)
+    valido, cuenta, detalle = _validar_cuenta(token)
     if not valido:
-        st.error("Token invalido. Revisa tu token de API.")
+        st.error(f"Token invalido. Revisa tu token de API.\n\n{detalle}")
         return
     render_cuenta_badge(f"✓ Conectado a: <strong>{cuenta}</strong>")
 
@@ -594,9 +594,9 @@ def _seccion_visitas():
         return
     token = token.strip()
 
-    valido, cuenta = _validar_cuenta(token)
+    valido, cuenta, detalle = _validar_cuenta(token)
     if not valido:
-        st.error("Token invalido. Revisa tu token de API.")
+        st.error(f"Token invalido. Revisa tu token de API.\n\n{detalle}")
         return
     render_cuenta_badge(f"✓ Conectado a: <strong>{cuenta}</strong>")
 

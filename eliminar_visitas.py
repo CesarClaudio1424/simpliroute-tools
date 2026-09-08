@@ -24,10 +24,10 @@ def validar_cuenta(token):
     try:
         r = requests.get(f"{API_BASE}/accounts/me/", headers=_headers(token), timeout=REQUEST_TIMEOUT)
         if r.status_code == 200:
-            return True, r.json().get("account", {}).get("name", "Sin nombre")
-    except requests.exceptions.RequestException:
-        pass
-    return False, None
+            return True, r.json().get("account", {}).get("name", "Sin nombre"), None
+        return False, None, f"HTTP {r.status_code}: {r.text[:200]}"
+    except requests.exceptions.RequestException as e:
+        return False, None, str(e)
 
 
 PAGINATED_PAGE_SIZE = 500
@@ -233,9 +233,9 @@ def _paso_token(key_prefix):
         render_tip("Ingresa el token de API de la cuenta.")
         return None, None
     token = token_input.strip()
-    valido, cuenta = validar_cuenta(token)
+    valido, cuenta, detalle = validar_cuenta(token)
     if not valido:
-        st.error("Token invalido. Revisa tu token de API.")
+        st.error(f"Token invalido. Revisa tu token de API.\n\n{detalle}")
         return None, None
     render_cuenta_badge(f"✓ Conectado a: <strong>{cuenta}</strong>")
     return token, cuenta

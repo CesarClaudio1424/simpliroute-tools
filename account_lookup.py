@@ -104,7 +104,7 @@ def resolver_token(account_id: int) -> str | None:
     return keys[0] if keys else None
 
 
-def validar_token_cuenta(token: str) -> tuple[bool, str | None]:
+def validar_token_cuenta(token: str) -> tuple[bool, str | None, str | None]:
     try:
         response = requests.get(
             f"{API_BASE}/accounts/me/",
@@ -112,10 +112,10 @@ def validar_token_cuenta(token: str) -> tuple[bool, str | None]:
             timeout=ACCOUNT_LOOKUP_TIMEOUT,
         )
         if response.status_code == 200:
-            return True, response.json().get("account", {}).get("name", "Sin nombre")
-    except requests.exceptions.RequestException:
-        pass
-    return False, None
+            return True, response.json().get("account", {}).get("name", "Sin nombre"), None
+        return False, None, f"HTTP {response.status_code}: {response.text[:200]}"
+    except requests.exceptions.RequestException as e:
+        return False, None, str(e)
 
 
 def render_sidebar_cuenta_activa():
@@ -181,12 +181,12 @@ def render_sidebar_cuenta_activa():
                 if not token:
                     st.error("No se encontro un token para esta cuenta.")
                 else:
-                    valido, nombre_validado = validar_token_cuenta(token)
+                    valido, nombre_validado, detalle = validar_token_cuenta(token)
                     if valido:
                         st.session_state["cuenta_activa"] = {"token": token, "name": nombre_validado, "id": cuenta["id"]}
                         st.rerun()
                     else:
-                        st.error("El token resuelto no paso la validacion contra /accounts/me/.")
+                        st.error(f"El token resuelto no paso la validacion contra /accounts/me/.\n\n{detalle}")
 
         if len(resultados) > 10:
             st.caption(f"+{len(resultados) - 10} mas — refina el nombre para acotar.")

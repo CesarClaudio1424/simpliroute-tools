@@ -53,10 +53,10 @@ def validar_cuenta(token):
         response = requests.get(f"{API_BASE}/accounts/me/", headers=headers, timeout=EDIT_TIMEOUT)
         if response.status_code == 200:
             nombre = response.json().get("account", {}).get("name", "Sin nombre")
-            return True, nombre
-    except requests.exceptions.RequestException:
-        pass
-    return False, None
+            return True, nombre, None
+        return False, None, f"HTTP {response.status_code}: {response.text[:200]}"
+    except requests.exceptions.RequestException as e:
+        return False, None, str(e)
 
 
 def enviar_visitas(bloque, token):
@@ -101,14 +101,14 @@ def pagina_edicion():
 
     if token:
         token = token.strip()
-        valido, cuenta = validar_cuenta(token)
+        valido, cuenta, detalle = validar_cuenta(token)
         if valido:
             st.markdown(
                 f'<div class="sr-cuenta">✓ Conectado a: <strong>{cuenta}</strong></div>',
                 unsafe_allow_html=True,
             )
         else:
-            st.error("Token invalido. Revisa tu token de API.")
+            st.error(f"Token invalido. Revisa tu token de API.\n\n{detalle}")
             st.stop()
     else:
         render_tip(

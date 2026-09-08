@@ -66,10 +66,10 @@ def _validar_cuenta(token):
     try:
         r = requests.get(f"{API_BASE}/accounts/me/", headers=_headers(token), timeout=REQUEST_TIMEOUT)
         if r.status_code == 200:
-            return True, r.json().get("account", {}).get("name", "Sin nombre")
-    except requests.exceptions.RequestException:
-        pass
-    return False, None
+            return True, r.json().get("account", {}).get("name", "Sin nombre"), None
+        return False, None, f"HTTP {r.status_code}: {r.text[:200]}"
+    except requests.exceptions.RequestException as e:
+        return False, None, str(e)
 
 
 def _get_all(session, url, max_paginas=MAX_PAGINAS):
@@ -591,9 +591,9 @@ def _tab_inventario():
         st.session_state.pop("iv_selected_id", None)
         st.session_state["iv_last_token"] = token
 
-    ok_cuenta, nombre_cuenta = _validar_cuenta(token)
+    ok_cuenta, nombre_cuenta, detalle = _validar_cuenta(token)
     if not ok_cuenta:
-        st.error("Token invalido o sin acceso a la cuenta.")
+        st.error(f"Token invalido o sin acceso a la cuenta.\n\n{detalle}")
         return
     render_cuenta_badge(f"Cuenta: {nombre_cuenta}")
 
@@ -817,9 +817,9 @@ def _tab_agenda():
         return
     token = token.strip()
 
-    ok_cuenta, nombre_cuenta = _validar_cuenta(token)
+    ok_cuenta, nombre_cuenta, detalle = _validar_cuenta(token)
     if not ok_cuenta:
-        st.error("Token invalido o sin acceso a la cuenta.")
+        st.error(f"Token invalido o sin acceso a la cuenta.\n\n{detalle}")
         return
     render_cuenta_badge(f"Cuenta: {nombre_cuenta}")
 

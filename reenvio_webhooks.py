@@ -36,10 +36,10 @@ def _validar_cuenta(token):
     try:
         r = requests.get(f"{API_BASE}/accounts/me/", headers=_headers(token), timeout=REQUEST_TIMEOUT)
         if r.status_code == 200:
-            return True, r.json().get("account", {}).get("name", "Sin nombre")
-    except requests.exceptions.RequestException:
-        pass
-    return False, None
+            return True, r.json().get("account", {}).get("name", "Sin nombre"), None
+        return False, None, f"HTTP {r.status_code}: {r.text[:200]}"
+    except requests.exceptions.RequestException as e:
+        return False, None, str(e)
 
 
 def _enviar_webhook(token, endpoint, id_key, id_value, action):
@@ -268,9 +268,9 @@ def _seccion_planes(token_post):
             return
         token_get = token_get.strip()
 
-        valido, cuenta = _validar_cuenta(token_get)
+        valido, cuenta, detalle = _validar_cuenta(token_get)
         if not valido:
-            st.error("Token invalido. Revisa el token de la cuenta.")
+            st.error(f"Token invalido. Revisa el token de la cuenta.\n\n{detalle}")
             return
         render_cuenta_badge(f"✓ Listando planes de: <strong>{cuenta}</strong>")
 
@@ -409,9 +409,9 @@ def _seccion_rutas(token_post):
             return
         token_get = token_get.strip()
 
-        valido, cuenta = _validar_cuenta(token_get)
+        valido, cuenta, detalle = _validar_cuenta(token_get)
         if not valido:
-            st.error("Token invalido. Revisa el token de la cuenta.")
+            st.error(f"Token invalido. Revisa el token de la cuenta.\n\n{detalle}")
             return
         render_cuenta_badge(f"✓ Listando rutas de: <strong>{cuenta}</strong>")
 
@@ -575,9 +575,9 @@ def _seccion_visitas(token_post):
             return
         token_get = token_get.strip()
 
-        valido, cuenta = _validar_cuenta(token_get)
+        valido, cuenta, detalle = _validar_cuenta(token_get)
         if not valido:
-            st.error("Token invalido. Revisa el token de la cuenta.")
+            st.error(f"Token invalido. Revisa el token de la cuenta.\n\n{detalle}")
             return
         render_cuenta_badge(f"✓ Listando visitas de: <strong>{cuenta}</strong>")
 
