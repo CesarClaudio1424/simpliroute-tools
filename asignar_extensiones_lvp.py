@@ -26,7 +26,7 @@ def _cargar_cuentas():
 
 def _staff_token():
     try:
-        return st.secrets["extensiones_lvp"]["staff_token"]
+        return st.secrets["api_config"]["checkout_token"]
     except KeyError:
         return None
 
@@ -166,7 +166,7 @@ def pagina_asignar_extensiones_lvp():
 
     staff_token = _staff_token()
     if not staff_token:
-        st.error("Falta configurar `[extensiones_lvp] staff_token` en secrets.")
+        st.error("Falta configurar `[api_config] checkout_token` en secrets.")
         st.stop()
 
     render_label("Paso 1 · Cuenta Liverpool")
