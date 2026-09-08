@@ -109,12 +109,10 @@ with st.sidebar:
     for categoria, herramientas in CATEGORIAS.items():
         with st.expander(categoria, expanded=(categoria == categoria_activa)):
             radio_key = f"nav_radio_{categoria}"
-            if radio_key not in st.session_state:
-                st.session_state[radio_key] = (
-                    st.session_state.pagina_activa if categoria == categoria_activa else herramientas[0]
-                )
+            if categoria == categoria_activa and radio_key not in st.session_state:
+                st.session_state[radio_key] = st.session_state.pagina_activa
             st.radio(
-                "Herramienta", herramientas, label_visibility="collapsed",
+                "Herramienta", herramientas, index=None, label_visibility="collapsed",
                 key=radio_key, on_change=_set_pagina_activa, args=(radio_key,),
             )
 
