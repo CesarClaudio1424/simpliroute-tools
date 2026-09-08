@@ -28,6 +28,7 @@ from salud_gps import pagina_salud_gps
 from directorio_usuarios import pagina_directorio_usuarios
 from visibilidad_planes import pagina_visibilidad_planes
 from visitas_liverpool import pagina_visitas_liverpool
+from asignar_extensiones_lvp import pagina_asignar_extensiones_lvp
 from account_lookup import render_sidebar_cuenta_activa
 
 st.set_page_config(
@@ -56,6 +57,9 @@ CATEGORIAS = {
     ],
     "📊 Reportes y Consultas": [
         "Reporte Visitas/Rutas", "Consulta Extensiones", "Directorio de Usuarios", "Visibilidad de Planes",
+    ],
+    "🔌 Retools": [
+        "Asignar Extensiones LVP",
     ],
 }
 
@@ -177,6 +181,8 @@ elif pagina == "Visibilidad de Planes":
     pagina_visibilidad_planes()
 elif pagina == "Visitas Liverpool":
     pagina_visitas_liverpool()
+elif pagina == "Asignar Extensiones LVP":
+    pagina_asignar_extensiones_lvp()
 else:
     pagina_validador_plan()
 

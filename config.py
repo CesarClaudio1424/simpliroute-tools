@@ -43,3 +43,8 @@ ACCOUNT_LOOKUP_COUNTRIES = [
     ("OTHER", "Otros paises"),
 ]
 ACCOUNT_LOOKUP_TIMEOUT = 15
+
+# Asignar Extensiones LVP
+RETOOL_EXTENSIONS_URL = "https://simpliroute.tryretool.com/api/public/98a09e5e-6d96-469a-8e1d-25d7e487295e"
+RETOOL_EXTENSIONS_TIMEOUT = 20
+EXTENSIONES_ASIGNAR_DELAY = 0.3  # seconds between llamadas de asignacion
