@@ -149,7 +149,7 @@ def render_sidebar_cuenta_activa():
     activa = st.session_state.get("cuenta_activa")
 
     if activa:
-        st.markdown(f"🟢 **Cuenta activa:**  \n{activa['name']}")
+        st.markdown(f"🟢 **Cuenta activa:**  \n{activa['name']} (#{activa['id']})")
         if st.button("Quitar cuenta activa", key="cuenta_activa_quitar", use_container_width=True):
             st.session_state["cuenta_activa"] = None
             for key in [k for k in st.session_state if k.startswith("sidebar_al_cache_")]:
