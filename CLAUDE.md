@@ -3,7 +3,7 @@
 ## Descripcion
 App Streamlit multi-herramienta con navegacion por sidebar. Incluye catorce herramientas:
 1. **Edicion Masiva de Visitas** — Sube un CSV y edita visitas en bloque via API SimpliRoute (PUT).
-2. **Webhooks Likewise** — Creacion/Inicio/Checkout reenvian el webhook nativo de SimpliRoute (`send-route-webhooks`/`send-webhooks`); Exclusiones sigue yendo al middleware Likewise (POST).
+2. **Webhooks Likewise** — Las 4 acciones (Creacion/Inicio/Checkout/Exclusiones) van al gateway Hermes/Brightcell (`POST /brightcell/reprocess`), cada una con su `action` (`create_plan`/`route_started`/`route_checkout`/`exclude_visits`).
 3. **Mover Visitas Likewise** — Busca visitas por rango de fechas, filtra por reference o ID, y las mueve a una fecha destino en las 4 cuentas Likewise (GET + PUT).
 4. **Bloqueo LVP** — Configura bloqueo de edicion y modo seguridad en cuentas Liverpool via API SimpliRoute (POST).
 5. **Reporte Visitas/Rutas** — Genera reportes por rango de fechas dividido en sub-intervalos y los envia por correo via API SimpliRoute (GET).
@@ -34,7 +34,10 @@ Estas apps viven en repos propios, separados de simpliroute-tools, y tienen su p
 
 ## Apps locales standalone
 Apps que no se despliegan en Streamlit Cloud, se distribuyen como `.exe`:
-- **Eliminar Visitas BAT (Flet):** `C:\Proyectos\EliminarBAT\` — app Flet (`main_flet.py`) empaquetada como `.exe` via `flet pack`. Busca visitas de la cuenta BAT (account_id 95718) que no tienen `planned_date` (invisibles para la API) conectandose directamente a la BD PostgreSQL via Cloud SQL Proxy, y las limpia via PUT. Flujo de busqueda: BD primero → API /reference/ → API fallback +-30 dias. Requiere `cloud-sql-proxy.exe.exe` en `C:\` y autenticacion gcloud. Tambien existe `main.py` (version Streamlit anterior, obsoleta).
+- **Eliminar Visitas BAT:** `C:\Proyectos\EliminarBAT\` — DOS implementaciones paralelas, no una obsoleta y otra vigente; hay que actualizar ambas al hacer cambios de UI/logica:
+  - `main.py` (Streamlit) — la que de hecho se abre normalmente, via `iniciar.bat` (arranca `cloud-sql-proxy.exe.exe` y luego `streamlit run main.py` con el Python global que tiene psycopg2).
+  - `main_flet.py` (Flet) — se compila aparte a `.exe` via `flet pack main_flet.py --name "Eliminar Visitas BAT" --hidden-import psycopg2 --hidden-import requests -y` (ver `Eliminar Visitas BAT.spec`); el binario en `dist\` NO se actualiza solo al editar el `.py`, hay que reempaquetar.
+  - Ambas hacen lo mismo: buscan visitas de la cuenta BAT (account_id 95718) que no tienen `planned_date` (invisibles para la API) conectandose directamente a la BD PostgreSQL via Cloud SQL Proxy, y las limpian via PUT. Flujo de busqueda: BD primero → API /reference/ → API fallback +-30 dias. Requiere `cloud-sql-proxy.exe.exe` en `C:\` y autenticacion gcloud (ADC) — ver [[reference_cloud_sql_proxy_avg_tls_block]] en memoria si el proxy autoriza pero el mTLS falla.
 
 ## Estructura
 ```
@@ -86,19 +89,17 @@ runtime.txt                          # Pin Python 3.12 para Streamlit Cloud
 
 ## Flujo: Webhooks Likewise
 1. Usuario selecciona cuenta (Telefonica, Entel, Omnicanalidad, Biobio)
-2. Elige acciones (Creacion, Inicio, Checkout o Exclusiones)
+2. Elige acciones (Creacion, Inicio, Checkout o Exclusiones) — no se pueden mezclar Exclusiones con las demas
 3. Ingresa `route_id` (UUID de SimpliRoute) para Creacion/Inicio/Checkout, o IDs de visita para Exclusiones (uno por linea)
-4. Al procesar:
-   - **Creacion/Inicio**: igual que Reenvio de Webhooks > pestaña Rutas — `POST /v1/mobile/send-route-webhooks` con `{"route_id", "action": "route_created"|"route_started"}`, auth `checkout_token`
-   - **Checkout**: igual que Checkout General — primero `GET /v1/routes/routes/{route_id}/` (con el token propio de la cuenta) para obtener `planned_date`, luego `POST /v1/mobile/send-webhooks` con `{"account_ids": [id], "planned_date", "route_ids": [route_id]}`, auth `checkout_token`
-   - **Exclusiones**: sigue igual, POST directo al middleware Likewise con array de visit IDs (sin equivalente nativo en SimpliRoute)
-5. Solo muestra errores en la lista; contador de procesados junto a la barra de progreso
-6. (Opcional) Al excluir, puede tambien limpiar las visitas de SimpliRoute:
-   - Usuario marca checkbox "Tambien eliminar visitas de SimpliRoute" e ingresa rango de fechas (max 7 dias)
-   - Token se carga desde `st.secrets.api_config.token_{cuenta}` (token_telefonica, token_entel, etc.)
-   - GET visitas por cada dia del rango, filtra las excluidas sin ruta asignada
-   - PUT bulk a `/routes/visits/` en lotes (total / 5, max 500 por lote) con `route: ""`, `planned_date: 2020-01-01`
-   - Timeout de 600s para consultas y edicion de limpieza
+4. Al procesar, las 4 acciones van al gateway Hermes/Brightcell (`POST https://connect.simpliroute.com/brightcell/reprocess`, auth `ApiKey` por cuenta desde secrets `[brightcell_hermes]`):
+   - **Creacion/Inicio/Checkout**: un POST por ruta — `{"action": "create_plan"|"route_started"|"route_checkout", "ids": [route_id]}`
+   - **Exclusiones**: primero resuelve cada ID pegado (vive en el campo `reference`) contra SimpliRoute (`GET /v1/routes/visits/reference/{reference}/`) para obtener el ID interno que exige Hermes, luego un unico POST con `{"action": "exclude_visits", "ids": [...]}`
+5. Solo muestra errores en la lista; contador de procesados junto a la barra de progreso (Creacion/Inicio/Checkout) o resultado unico por ID (Exclusiones)
+6. (Opcional) Al excluir, puede tambien limpiar las visitas en SimpliRoute:
+   - Usuario marca checkbox "Tambien eliminar visitas de SimpliRoute"
+   - Se aplica sobre los IDs que Hermes confirmo excluidos (`status: "ok"`); si Hermes no confirma ninguno, cae a fallback usando los IDs que si se lograron resolver por reference
+   - `PATCH /v1/routes/visits/` con payload minimo: `route: ""`, `planned_date: 2020-01-01`
+   - Timeout de 600s (CLEANUP_TIMEOUT)
 
 ## Flujo: Mover Visitas Likewise
 1. Usuario elige tipo de busqueda: **Reference** o **ID** de visita
@@ -158,23 +159,20 @@ streamlit run main.py
 - `POST /v1/accounts/{ACCOUNT_ID}/configs/` - Configuracion de cuenta
 - Auth: `Authorization: Token {API_TOKEN}`
 
-### SimpliRoute (Webhooks Likewise — Creacion/Inicio/Checkout)
-- `POST /v1/mobile/send-route-webhooks` - Creacion/Inicio: `{"route_id": uuid, "action": "route_created"|"route_started"}`
-- `GET /v1/routes/routes/{route_id}/` - Checkout: obtiene `planned_date` (auth con token propio de la cuenta: token_telefonica, token_entel, etc.)
-- `POST /v1/mobile/send-webhooks` - Checkout: `{"account_ids": [id], "planned_date", "route_ids": [route_id]}`
-- Auth de los POST: `Authorization: Token {checkout_token}` (desde secrets, misma cuenta que Checkout General/Reenvio de Webhooks)
-- `account_id` por empresa (fijo en `webhook.ACCOUNT_IDS`): Telefonica=15289, Entel=28920, Omnicanalidad=32597, Biobio=70696
+### Gateway Hermes/Brightcell (Webhooks Likewise — las 4 acciones)
+- `POST https://connect.simpliroute.com/brightcell/reprocess`
+- Auth: `Authorization: ApiKey {clave-por-cuenta}` (secrets `[brightcell_hermes]`: telefonica/entel/omnicanalidad/biobio)
+- Creacion: `{"action": "create_plan", "ids": [route_id]}`
+- Inicio: `{"action": "route_started", "ids": [route_id]}`
+- Checkout: `{"action": "route_checkout", "ids": [route_id]}`
+- Exclusiones: `{"action": "exclude_visits", "ids": [visit_id, ...]}` — visit_id ya resuelto (no el reference crudo)
+- Respuesta: `{"results": [{"id", "status": "ok"|"error", "error"?}]}`
+- El middleware Likewise viejo (`likewizemiddleware-*.cloudfunctions.net`) fue retirado; Hermes lo reemplaza para las 4 acciones
 
-### Likewise Middleware (Webhooks — solo Exclusion)
-- Base: `https://us-central1-likewizemiddleware-{empresa}.cloudfunctions.net/`
-- `POST /likewize/webhook/visits/support` - Exclusion de visitas (sin equivalente nativo en SimpliRoute)
-- Sin auth (acceso por URL)
-
-### SimpliRoute (Limpieza post-exclusion)
-- `GET /v1/routes/visits/?planned_date={YYYY-MM-DD}` - Obtener visitas por fecha (una consulta por dia del rango)
-- `PUT /v1/routes/visits/` - Edicion bulk: quitar ruta y mover fecha a 2020-01-01 (lotes de total/5, max 500)
+### SimpliRoute (Resolver reference / limpieza post-exclusion)
+- `GET /v1/routes/visits/reference/{reference}/` - Resuelve el "ID" que pega el usuario (vive en el campo `reference`) al ID interno de SimpliRoute que exige Hermes
+- `PATCH /v1/routes/visits/` - Limpieza opcional: quita ruta y mueve fecha a 2020-01-01 (payload minimo, solo para los IDs confirmados por Hermes, o los resueltos si Hermes no confirma ninguno)
 - Auth: `Authorization: Token {token_cuenta}` (desde secrets: token_telefonica, token_entel, etc.)
-- Matching: visitas se identifican por campo `reference` (lo que el usuario pega es el "ID" desde su sistema, pero en SimpliRoute vive en `reference`; el mismo numero se manda al webhook de exclusion). Solo se limpian las que no tienen ruta asignada
 - Timeout: 600s (CLEANUP_TIMEOUT en config.py)
 
 ### SimpliRoute (Checkout General)

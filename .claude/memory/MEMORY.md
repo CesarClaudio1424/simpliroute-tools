@@ -14,4 +14,18 @@
 - [Clon repo colega Brandon](project_repo_colega_brandon.md) — c:\Proyectos\repo, origin=repo de Brandon, pruebas=pruebassimpli; no confundir con remotes de Edicion
 - [Migracion Next.js de Brandon](project_migracion_nextjs_brandon.md) — reescritura completa del stack; 8/21 herramientas ya migradas, 13 (Unilever, Zonas KML, etc) siguen dependiendo de este repo
 - [Buscador de cuenta via Retool](reference_account_lookup_retool.md) — "cuenta activa" global en la barra lateral (token oculto); + pais "Otros" via Staff Token/Admin Portal
-- [Migracion Hermes/Brightcell](project_hermes_brightcell_migracion.md) — middleware Likewise viejo retirado por Brandon; Exclusiones migrado a Hermes, sin probar en vivo aun
+- [Migracion Hermes/Brightcell](project_hermes_brightcell_migracion.md) — middleware Likewise viejo retirado; las 4 acciones (Creacion/Inicio/Checkout/Exclusiones) van por Hermes
+- [Quirks PUT visitas: seller/visit_type/title/address](reference_simpliroute_visit_put_quirks.md) — seller=UUID plano; visit_type=key string (no id numerico); title/address obligatorios aunque no cambien
+- [Debug optimizer.simpliroute.com](reference_simpliroute_optimizer_debug.md) — endpoint VRP interno; bugs: beauty+duplicados=E5001, shift 00:00=E01005, load_2 contaminado con telefono=E02003
+- [Filtro de fecha roto en /routes/plans/](reference_simpliroute_plans_date_filter_roto.md) — start_date/end_date siempre devuelve []; traer todo y filtrar local por name/start_date
+- [Extra fields obligatorios clientes BAT](reference_bat_client_extra_fields.md) — 12 keys `_bat` obligatorias en accounts/clients/, mas visit_type BRAV y skill Geografico; señales de cliente creado fuera del maestro
+- [BAT Brasil: archivo Yandeh LAPA no sube](project_bat_brasil_yandeh_lapa.md) — investigacion abierta, causa raiz sin confirmar; se descarto duplicados de reference y visitas ya creadas
+- [Notion: BD/Retool hallazgos](reference_notion_bd_retool_findings.md) — user `retools_reporting` da password error en Retool (mismo user que Consulta Extensiones); query oficial de retools embebidos coincide con la nuestra
+- [Notion: webhooks/BAT hallazgos](reference_notion_webhooks_bat_findings.md) — catalogo completo webhooks nativos (plan, on_its_way, route_edited); endpoint reproceso Brightcell distinto de Exclusiones; API nativa sync BAT; gps_metadata opcional en events/register
+- [Migracion a droplet propio (personal)](project_migracion_droplet_personal.md) — reto personal de Cesar, separado del de Brandon; roadmap/checklist en Artifact: https://claude.ai/artifact/5zkA35cMTyjHNCyeuKJXN7
+- [Auth real de EliminarBAT contra icarus](reference_eliminarbat_db_auth_mechanism.md) — proxy solo tunela con ADC; login a Postgres es usuario `jhernandez` hardcodeado, no IAM
+- [Proyecto Solidus Terminal P2P](project_solidus_terminal_p2p.md) — terminal de arbitraje P2P de Cesar; su stack (React19+Vite+Tailwind v4, FastAPI/Py3.12) es la referencia para el droplet
+- [No enmascarar secretos con comandos propios](feedback_no_enmascarar_secretos_con_comandos.md) — un sed mal armado expuso el Staff Token completo; usar solo grep -c/wc -c/test -f, nunca sed/awk "inteligente"
+- [No "diagnosticar" endpoints de escritura](feedback_diagnostico_en_endpoints_de_escritura.md) — un curl "solo para ver headers" contra un POST real ejecuto la escritura de nuevo, causo filas duplicadas
+- [cloud-sql-proxy bloqueado por AVG](reference_cloud_sql_proxy_avg_tls_block.md) — AVG intercepta el mTLS a icarus-prod; truststore no aplica a binarios Go, conexion BD de EliminarBAT falla en esta maquina
+- [Verificar entry point de apps standalone](feedback_verificar_entry_point_apps_standalone.md) — EliminarBAT tiene main.py (Streamlit, el que corre iniciar.bat) y main_flet.py (Flet, compilado a .exe); revisar el lanzador real antes de editar

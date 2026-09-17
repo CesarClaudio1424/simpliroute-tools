@@ -3,7 +3,7 @@ import time
 import streamlit as st
 from config import (
     API_BASE, REQUEST_TIMEOUT, CLEANUP_TIMEOUT,
-    API_SEND_WEBHOOKS, API_SEND_ROUTE_WEBHOOKS, MAX_RETRIES, RETRY_BASE_DELAY,
+    MAX_RETRIES, RETRY_BASE_DELAY,
 )
 
 # Exclusion via gateway Hermes/Brightcell (el middleware Likewise viejo fue retirado)
@@ -23,14 +23,6 @@ ACCOUNT_TOKENS = {
     "Entel": "token_entel",
     "Omnicanalidad": "token_omnicanalidad",
     "Biobio": "token_biobio",
-}
-
-# account_id real en SimpliRoute de cada cuenta Likewise (via GET /v1/accounts/me/)
-ACCOUNT_IDS = {
-    "Telefonica": 15289,
-    "Entel": 28920,
-    "Omnicanalidad": 32597,
-    "Biobio": 70696,
 }
 
 
@@ -64,20 +56,47 @@ def resolver_visita_por_reference(token, reference):
     return ids, None
 
 
+def _post_hermes(action, api_key, ids):
+    """POST generico a Hermes con reintentos en 5xx. Devuelve (results, status_code, error_transporte)."""
+    headers = {"Authorization": f"ApiKey {api_key}", "Content-Type": "application/json"}
+    payload = {"action": action, "ids": list(ids)}
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = requests.post(HERMES_URL, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
+        except requests.exceptions.RequestException as e:
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_BASE_DELAY * (2 ** attempt))
+                continue
+            return None, 0, f"Error de conexion: {str(e)}"
+        if resp.status_code == 200:
+            try:
+                return resp.json().get("results", []), 200, None
+            except ValueError:
+                return [], 200, None
+        if resp.status_code >= 500 and attempt < MAX_RETRIES:
+            time.sleep(RETRY_BASE_DELAY * (2 ** attempt))
+            continue
+        return None, resp.status_code, resp.text[:500]
+    return None, 0, "Reintentos agotados"
+
+
 def excluir_visitas_hermes(api_key, visita_ids):
     """POST a Hermes (accion exclude_visits). visita_ids = IDs de SimpliRoute ya resueltos."""
-    headers = {"Authorization": f"ApiKey {api_key}", "Content-Type": "application/json"}
-    payload = {"action": "exclude_visits", "ids": [int(v) for v in visita_ids]}
-    try:
-        resp = requests.post(HERMES_URL, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
-    except requests.exceptions.RequestException as e:
-        return None, 0, f"Error de conexion: {str(e)}"
-    if resp.status_code != 200:
-        return None, resp.status_code, resp.text[:500]
-    try:
-        return resp.json().get("results", []), resp.status_code, None
-    except ValueError:
-        return None, resp.status_code, "Respuesta no es JSON valido"
+    return _post_hermes("exclude_visits", api_key, [int(v) for v in visita_ids])
+
+
+def accion_ruta_hermes(api_key, route_id, action):
+    """Creacion/Inicio/Checkout via Hermes: un POST por ruta.
+    action: "create_plan" | "route_started" | "route_checkout"."""
+    results, status, err = _post_hermes(action, api_key, [route_id])
+    if err:
+        return False, err
+    if results:
+        r = results[0]
+        if r.get("status") == "ok":
+            return True, ""
+        return False, r.get("error") or f"Hermes: status {r.get('status')}"
+    return True, ""
 
 
 def limpiar_visitas_hermes(token, visita_ids):
@@ -126,51 +145,3 @@ def procesar_exclusion_hermes(token, api_key, references):
     return detalle, sin_resolver, confirmados
 
 
-def _post_con_reintentos(url, headers, payload):
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
-            if resp.status_code == 200:
-                return True, ""
-            if resp.status_code >= 500 and attempt < MAX_RETRIES:
-                time.sleep(RETRY_BASE_DELAY * (2 ** attempt))
-                continue
-            return False, f"HTTP {resp.status_code}: {resp.text[:300]}"
-        except requests.exceptions.RequestException as e:
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_BASE_DELAY * (2 ** attempt))
-                continue
-            return False, f"Error de conexion: {str(e)}"
-    return False, "Reintentos agotados"
-
-
-def enviar_route_webhook(token_post, route_id, action):
-    """Creacion/Inicio: POST /v1/mobile/send-route-webhooks (igual que Reenvio de Webhooks > Rutas)."""
-    headers = {"Authorization": f"Token {token_post}", "Content-Type": "application/json"}
-    payload = {"route_id": route_id, "action": action}
-    return _post_con_reintentos(API_SEND_ROUTE_WEBHOOKS, headers, payload)
-
-
-def obtener_planned_date(token, route_id):
-    headers = {"Authorization": f"Token {token}"}
-    url = f"{API_BASE}/routes/routes/{route_id}/"
-    try:
-        resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
-        if resp.status_code == 200:
-            planned_date = resp.json().get("planned_date")
-            if not planned_date:
-                return None, "Respuesta sin planned_date"
-            return planned_date, None
-        return None, f"HTTP {resp.status_code}: {resp.text[:300]}"
-    except requests.exceptions.RequestException as e:
-        return None, f"Error de conexion: {str(e)}"
-
-
-def procesar_checkout(token_get, token_post, account_id, route_id):
-    """Checkout: igual que Checkout General — POST /v1/mobile/send-webhooks con route_ids."""
-    planned_date, err = obtener_planned_date(token_get, route_id)
-    if err:
-        return False, f"GET ruta: {err}"
-    headers = {"Authorization": f"Token {token_post}", "Content-Type": "application/json"}
-    payload = {"account_ids": [account_id], "planned_date": planned_date, "route_ids": [route_id]}
-    return _post_con_reintentos(API_SEND_WEBHOOKS, headers, payload)

@@ -18,7 +18,7 @@ def pagina_webhooks():
             '<strong>Ingresa los datos</strong> — Creacion/Inicio/Checkout: <code>route_id</code> (UUID) de SimpliRoute. Exclusiones: IDs de visita. Uno por linea.',
             '<strong>Procesa</strong> — Las rutas se envian una a una. Las exclusiones se envian todas en un solo request.',
         ],
-        tip='Creacion, Inicio y Checkout reenvian el webhook nativo de SimpliRoute (igual que la pestaña Rutas de Reenvio de Webhooks / Checkout General). Exclusiones va al gateway Hermes/Brightcell: primero resuelve cada ID contra SimpliRoute (reference), luego excluye en Hermes.',
+        tip='Las 4 acciones van al gateway Hermes/Brightcell. Creacion, Inicio y Checkout se envian directo con el route_id (create_plan/route_started/route_checkout). Exclusiones primero resuelve cada ID contra SimpliRoute (reference) y luego excluye en Hermes (exclude_visits).',
     )
 
     # --- Paso 1: Cuenta ---
@@ -150,10 +150,10 @@ def pagina_webhooks():
                         st.code(body_l[:500])
         scroll_to_bottom()
     else:
-        token_post = load_secret("checkout_token", "Token `checkout_token` no encontrado en secrets (api_config.checkout_token)")
-        token_key = webhook.ACCOUNT_TOKENS[cuenta]
-        token_get = load_secret(token_key, f"Token de {cuenta} no encontrado en secrets (api_config.{token_key})")
-        account_id = webhook.ACCOUNT_IDS[cuenta]
+        api_key = webhook.obtener_hermes_api_key(cuenta)
+        if not api_key:
+            st.error(f"Falta la clave Hermes de {cuenta} en secrets ([brightcell_hermes].{webhook.HERMES_KEYS[cuenta]}).")
+            st.stop()
 
         operaciones = []
         if creacion:
@@ -172,13 +172,9 @@ def pagina_webhooks():
 
         barra, contador, contenedor_errores = create_progress_tracker(total, "Procesando webhooks...")
 
+        ACCION_HERMES = {"Creacion": "create_plan", "Inicio": "route_started", "Checkout": "route_checkout"}
         for i, (accion, item) in enumerate(operaciones):
-            if accion == "Creacion":
-                ok, detalle = webhook.enviar_route_webhook(token_post, item, "route_created")
-            elif accion == "Inicio":
-                ok, detalle = webhook.enviar_route_webhook(token_post, item, "route_started")
-            else:
-                ok, detalle = webhook.procesar_checkout(token_get, token_post, account_id, item)
+            ok, detalle = webhook.accion_ruta_hermes(api_key, item, ACCION_HERMES[accion])
             procesados = i + 1
 
             if ok:
