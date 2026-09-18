@@ -21,6 +21,7 @@ from flotas import pagina_flotas
 from detalle_visitas_lvp import pagina_detalle_visitas_lvp
 from validador_plan import pagina_validador_plan
 from motivos_rechazo import pagina_motivos_rechazo
+from tipos_visita import pagina_tipos_visita
 from consulta_extensiones import pagina_consulta_extensiones
 from inspector_vehiculos import pagina_inspector_vehiculos
 from auditor_flotas import pagina_auditor_flotas
@@ -29,6 +30,7 @@ from directorio_usuarios import pagina_directorio_usuarios
 from visibilidad_planes import pagina_visibilidad_planes
 from visitas_liverpool import pagina_visitas_liverpool
 from asignar_extensiones_lvp import pagina_asignar_extensiones_lvp
+from comparar_cuentas import pagina_comparar_cuentas
 from account_lookup import render_sidebar_cuenta_activa
 
 st.set_page_config(
@@ -53,10 +55,11 @@ CATEGORIAS = {
         "Inspector de Vehiculos", "Auditor de Flotas", "Salud GPS",
     ],
     "⚙️ Configuracion de Cuenta": [
-        "Bloqueo LVP", "Zonas KML", "Motivos de Rechazo",
+        "Bloqueo LVP", "Zonas KML", "Motivos de Rechazo", "Tipos de Visita",
     ],
     "📊 Reportes y Consultas": [
         "Reporte Visitas/Rutas", "Consulta Extensiones", "Directorio de Usuarios", "Visibilidad de Planes",
+        "Comparar Cuentas",
     ],
     "🔌 Retools": [
         "Asignar Extensiones LVP",
@@ -149,6 +152,8 @@ elif pagina == "Zonas KML":
     pagina_zonas_kml()
 elif pagina == "Motivos de Rechazo":
     pagina_motivos_rechazo()
+elif pagina == "Tipos de Visita":
+    pagina_tipos_visita()
 elif pagina == "Recuperar Visitas LVP":
     pagina_recuperar_lvp()
 elif pagina == "Detalle Visitas LVP":
@@ -181,6 +186,8 @@ elif pagina == "Visitas Liverpool":
     pagina_visitas_liverpool()
 elif pagina == "Asignar Extensiones LVP":
     pagina_asignar_extensiones_lvp()
+elif pagina == "Comparar Cuentas":
+    pagina_comparar_cuentas()
 else:
     pagina_validador_plan()
 

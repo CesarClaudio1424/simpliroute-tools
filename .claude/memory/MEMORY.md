@@ -12,7 +12,7 @@
 - [Tokens acumulados en settings](reference_claude_settings_tokens_acumulados.md) — settings.json/settings.local.json tienen tokens reales en texto plano; nunca ampliar el gitignore sobre ellos
 - [Quirks de events/register SR](reference_simpliroute_events_register_quirks.md) — ROUTE_STARTED resetea status a started; ROUTE_FINISHED con date_time igual al end_time existente es no-op, desplazar +1s
 - [Clon repo colega Brandon](project_repo_colega_brandon.md) — c:\Proyectos\repo, origin=repo de Brandon, pruebas=pruebassimpli; no confundir con remotes de Edicion
-- [Migracion Next.js de Brandon](project_migracion_nextjs_brandon.md) — reescritura completa del stack; 8/21 herramientas ya migradas, 13 (Unilever, Zonas KML, etc) siguen dependiendo de este repo
+- [Migracion Next.js de Brandon](project_migracion_nextjs_brandon.md) — reescritura completa del stack; 10/14 ya migradas, 4 (Unilever, Zonas KML, Recuperar LVP, Asig. Fija Uni) quedan deprecadas del lado nuevo y permanentes aca
 - [Buscador de cuenta via Retool](reference_account_lookup_retool.md) — "cuenta activa" global en la barra lateral (token oculto); + pais "Otros" via Staff Token/Admin Portal
 - [Migracion Hermes/Brightcell](project_hermes_brightcell_migracion.md) — middleware Likewise viejo retirado; las 4 acciones (Creacion/Inicio/Checkout/Exclusiones) van por Hermes
 - [Quirks PUT visitas: seller/visit_type/title/address](reference_simpliroute_visit_put_quirks.md) — seller=UUID plano; visit_type=key string (no id numerico); title/address obligatorios aunque no cambien
@@ -29,3 +29,4 @@
 - [No "diagnosticar" endpoints de escritura](feedback_diagnostico_en_endpoints_de_escritura.md) — un curl "solo para ver headers" contra un POST real ejecuto la escritura de nuevo, causo filas duplicadas
 - [cloud-sql-proxy bloqueado por AVG](reference_cloud_sql_proxy_avg_tls_block.md) — AVG intercepta el mTLS a icarus-prod; truststore no aplica a binarios Go, conexion BD de EliminarBAT falla en esta maquina
 - [Verificar entry point de apps standalone](feedback_verificar_entry_point_apps_standalone.md) — EliminarBAT tiene main.py (Streamlit, el que corre iniciar.bat) y main_flet.py (Flet, compilado a .exe); revisar el lanzador real antes de editar
+- [Visit types: key normalizado por la API](reference_simpliroute_visit_types_key_normalizado.md) — POST /v1/accounts/visit-types/ quita guiones del key aunque se envien; leer siempre la respuesta
